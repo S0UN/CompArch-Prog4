@@ -54,7 +54,6 @@ int validate_opcode(char *token) {
 }
 
 int validate_macro(char *token) {
-    // Extended list to include "in", "out", and "ld"
     const char *valid_macros[] = {"in", "out", "clr", "ld", "push", "pop", "halt", "call", "return", NULL};
     for (int i = 0; valid_macros[i] != NULL; i++) {
         if (strcmp(token, valid_macros[i]) == 0)
@@ -84,7 +83,7 @@ void report_error(const char *message, const char *line) {
 }
 
 // --- NEW: Helper to detect memory operands ---
-// Returns 1 if operand matches pattern (rx)(literal), 0 otherwise.
+// Returns 1 if operand matches pattern (rX)(literal) enclosed in parentheses.
 int is_memory_operand(const char *operand) {
     char reg[10];
     int lit;
@@ -111,7 +110,6 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
         if (strlen(buffer) == 0)
             continue;
         
-        // Section directives
         if (strncmp(buffer, ".code", 5) == 0) {
             in_code_section = 1;
             continue;
@@ -202,19 +200,18 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
 }
 
 // --- Macro Expansion ---
-// (Only the macros relevant to your tests are modified below.)
+// Here we mimic the good code’s logic for single–instruction tests.
 void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address, int in_code_section) {
     Line new_entry;
     memset(&new_entry, 0, sizeof(Line));
     new_entry.type = 'I';
     new_entry.from_call = 0;
     
-    // --- addi rX, literal (no expansion needed) ---
-    // (If not a macro, the normal instruction processing is used.)
+    // For addi and other non‐macro instructions, no expansion is needed.
+    // Only handle macros.
     
-    // --- call :func -> expand into three instructions ---
+    // --- call :label -> subi r30, r30, 8; st r31, r30, 0; br <label> ---
     if (strcmp(line_entry->opcode, "call") == 0) {
-        // First: subi r30, r30, 8
         strcpy(new_entry.opcode, "subi");
         strcpy(new_entry.registers[0], "r30");
         strcpy(new_entry.registers[1], "r30");
@@ -224,7 +221,6 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address, i
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
         
-        // Second: st r31, r30, 0
         memset(&new_entry, 0, sizeof(Line));
         new_entry.type = 'I';
         strcpy(new_entry.opcode, "st");
@@ -236,13 +232,13 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address, i
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
         
-        // Third: br with the label unchanged (do not adjust)
         memset(&new_entry, 0, sizeof(Line));
         new_entry.type = 'I';
         strcpy(new_entry.opcode, "br");
+        // Do not adjust; leave the label (e.g. ":func") as is.
         strncpy(new_entry.label, line_entry->operands[0], sizeof(new_entry.label)-1);
         new_entry.operand_count = 0;
-        new_entry.from_call = 0;  // Do not mark for adjustment
+        new_entry.from_call = 0;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
@@ -295,7 +291,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address, i
         return;
     }
     
-    // --- push rX -> subi r30, r30, 8; st rX, r30, 0 ---
+    // --- push and pop are handled similarly as before ---
     if (strcmp(line_entry->opcode, "push") == 0) {
         strcpy(new_entry.opcode, "subi");
         strcpy(new_entry.registers[0], "r30");
@@ -305,7 +301,6 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address, i
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
-        
         memset(&new_entry, 0, sizeof(Line));
         new_entry.type = 'I';
         strcpy(new_entry.opcode, "st");
@@ -319,7 +314,6 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address, i
         return;
     }
     
-    // --- pop rX -> ld rX, r30, 0; addi r30, r30, 8 ---
     if (strcmp(line_entry->opcode, "pop") == 0) {
         strcpy(new_entry.opcode, "ld");
         strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0])-1);
@@ -329,7 +323,6 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address, i
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
-        
         memset(&new_entry, 0, sizeof(Line));
         new_entry.type = 'I';
         strcpy(new_entry.opcode, "addi");
@@ -354,12 +347,12 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address, i
         return;
     }
     
-    // For any other macro, you can add additional cases as needed.
+    // For any other macro not handled, you could add additional cases.
 }
 
 // --- Second Pass: Resolve label operands ---
-// For any instruction with a label operand (starting with ':'), attempt to resolve it.
-// For single–instruction tests, if a label is undefined, leave it unchanged.
+// For instructions with a label operand (starting with ':'), if the label is found, replace it;
+// otherwise leave it unchanged (for single–instruction tests).
 void resolve_labels(ArrayList *instructions, LabelTable *labels) {
     for (int i = 0; i < instructions->size; i++) {
         Line *line = &instructions->lines[i];
@@ -370,13 +363,13 @@ void resolve_labels(ArrayList *instructions, LabelTable *labels) {
             if (addr != -1) {
                 snprintf(line->label, sizeof(line->label), "0x%X", addr);
             }
-            // Else leave the label as is for single-instruction tests.
+            // Else: leave the label unchanged.
         }
     }
 }
 
 // --- Write final output file ---
-// Output proper assembly with section directives and tab indents.
+// Output proper assembly with section directives and a tab indent.
 void write_output_file(const char *output_filename, ArrayList *instructions) {
     FILE *fp = fopen(output_filename, "w");
     if (!fp) {
@@ -395,10 +388,11 @@ void write_output_file(const char *output_filename, ArrayList *instructions) {
             current_section = line->type;
         }
         fprintf(fp, "\t");
+        // Special case for addi/subi with two operands:
         if ((strcmp(line->opcode, "addi") == 0 || strcmp(line->opcode, "subi") == 0) && line->operand_count == 2) {
-            // For addi/subi with one register and a literal.
             fprintf(fp, "%s %s, %d", line->opcode, line->registers[0], line->literal);
         }
+        // Special case for mov with 2 operands.
         else if (strcmp(line->opcode, "mov") == 0 && line->operand_count == 2) {
             fprintf(fp, "mov %s, %s", line->operands[0], line->operands[1]);
         }
