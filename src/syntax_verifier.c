@@ -9,11 +9,25 @@
 
 // --- Helper functions ---
 
+// Now also trim leading whitespace
+void trim_whitespace(char *line) {
+    // Remove leading whitespace (in place)
+    int start = 0;
+    while(line[start] && isspace(line[start])) start++;
+    if (start > 0) {
+        memmove(line, line + start, strlen(line + start) + 1);
+    }
+    // Then trim trailing whitespace
+    int len = strlen(line);
+    while (len > 0 && isspace(line[len - 1]))
+        line[--len] = '\0';
+}
+
 void remove_comments(char *line) {
     char *comment_pos = strchr(line, ';');
     if (comment_pos)
         *comment_pos = '\0';
-    // Remove any trailing whitespace after comment removal
+    // Now trim trailing whitespace after comment removal
     int len = strlen(line);
     while(len > 0 && isspace(line[len-1]))
         line[--len] = '\0';
@@ -35,7 +49,6 @@ int validate_label_format(char *token) {
 }
 
 int validate_opcode(char *token) {
-    // A simple check: allow letters only (could be extended)
     for (int i = 0; token[i] != '\0'; i++) {
         if (!isalpha(token[i]))
             return 0;
@@ -73,7 +86,7 @@ void report_error(const char *message, const char *line) {
 }
 
 // --- Processing and tokenizing the input file ---
-// For simplicity we assume tokens are separated by spaces.
+// (Tokens are assumed to be separated by spaces or tabs.)
 int process_file(const char *input_filename, ArrayList *lines, LabelTable **labels) {
     FILE *fp = fopen(input_filename, "r");
     if (!fp) {
@@ -82,16 +95,17 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
     }
     
     char buffer[256];
-    int address = 0x1000;         // Start of code
-    int in_code_section = 1;      // 1 = .code, 0 = .data
+    int address = 0x1000;         // Start address for code
+    int in_code_section = 1;      // 1 = .code; 0 = .data
     
     while (fgets(buffer, sizeof(buffer), fp)) {
+        // First remove any comments and then trim both leading and trailing whitespace
         remove_comments(buffer);
-        trim_trailing_whitespace(buffer);
+        trim_whitespace(buffer);
         if (strlen(buffer) == 0)
             continue;
         
-        // Section directives
+        // Section directives: check after trimming
         if (strncmp(buffer, ".code", 5) == 0) {
             in_code_section = 1;
             continue;
@@ -107,22 +121,22 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
         line_entry.type = in_code_section ? 'I' : 'D';
         line_entry.from_call = 0;
         
-        // If a label line (starts with a colon)
+        // If the line is a label (starts with a colon)
         if (buffer[0] == ':') {
             if (!validate_label_format(buffer)) {
                 report_error("Syntax Error: Invalid label format", buffer);
                 fclose(fp);
                 return 1;
             }
-            // Store label (remove the leading ':')
-            strncpy(line_entry.label, buffer+1, sizeof(line_entry.label)-1);
+            // Store label (without the colon)
+            strncpy(line_entry.label, buffer + 1, sizeof(line_entry.label)-1);
             line_entry.is_label = 1;
             store_label(labels, line_entry.label, address, in_code_section);
-            // Do not add a label line to the output list.
+            // Do not add label-only lines to the instruction list.
             continue;
         }
         
-        // Tokenize the line (split on spaces)
+        // Tokenize the line (using spaces and tabs)
         char *token = strtok(buffer, " \t");
         if (!token) {
             report_error("Syntax Error: Empty instruction", buffer);
@@ -130,9 +144,8 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
             return 1;
         }
         
-        // Check for macro first
+        // Check for a macro first
         if (validate_macro(token)) {
-            // Store the macro name in opcode and then tokens for operands.
             strncpy(line_entry.opcode, token, sizeof(line_entry.opcode)-1);
             int op_count = 0;
             while ((token = strtok(NULL, " \t")) != NULL && op_count < 4) {
@@ -140,36 +153,31 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
                 op_count++;
             }
             line_entry.operand_count = op_count;
-            // Expand the macro (this function will add one or more instructions to our list
-            // and update the address accordingly)
+            // Expand the macro (this will add one or more instructions and update the address)
             expand_macro(&line_entry, lines, &address, in_code_section);
             continue;
         }
         
-        // Otherwise, assume it’s a normal instruction or a data literal.
-        // If in code section, the first token is the opcode.
+        // Otherwise, it is a normal instruction (in code) or a data literal (in data)
         if (in_code_section) {
             strncpy(line_entry.opcode, token, sizeof(line_entry.opcode)-1);
             int op_count = 0;
             while ((token = strtok(NULL, " \t,")) != NULL && op_count < 4) {
                 strncpy(line_entry.operands[op_count], token, sizeof(line_entry.operands[op_count])-1);
-                // If token is a register, store in registers array
-                if (token[0]=='r' && validate_register(token)) {
+                if (token[0] == 'r' && validate_register(token)) {
                     strncpy(line_entry.registers[op_count], token, sizeof(line_entry.registers[op_count])-1);
                 }
-                // If token is numeric, store as literal.
                 else if (isdigit(token[0]) || token[0]=='-') {
                     line_entry.literal = atoi(token);
                 }
-                // If token is a label operand (starts with ':')
-                else if (token[0]==':') {
+                else if (token[0] == ':') {
                     strncpy(line_entry.label, token, sizeof(line_entry.label)-1);
                 }
                 op_count++;
             }
             line_entry.operand_count = op_count;
         } else { 
-            // In data section, the line is expected to be a literal.
+            // In the .data section, expect a literal
             if (validate_literal(token)) {
                 line_entry.literal = atoi(token);
             } else {
@@ -179,10 +187,8 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
             }
         }
         
-        // Add this line to the instruction list.
         add_to_arraylist(lines, line_entry);
-        
-        // Increment address: 4 bytes for code, 8 bytes for data.
+        // Increment address: 4 bytes for instructions, 8 bytes for data
         address += in_code_section ? 4 : 8;
     }
     
@@ -191,8 +197,8 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
 }
 
 // --- Macro Expansion ---
-// The function below expands known macros into one or more instructions.
-// Note that it uses the current section (in_code_section) to decide on the instruction size (always 4 in code).
+// Expands known macros into one or more instructions.
+// (The structure is unchanged from your original code.)
 void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address, int in_code_section) {
     Line new_entry;
     memset(&new_entry, 0, sizeof(Line));
@@ -202,7 +208,6 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address, i
     // --- clr rX -> xor rX, rX, rX ---
     if (strcmp(line_entry->opcode, "clr") == 0) {
         strcpy(new_entry.opcode, "xor");
-        // The operand is in line_entry->operands[0]
         strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0])-1);
         strncpy(new_entry.registers[1], line_entry->operands[0], sizeof(new_entry.registers[1])-1);
         strncpy(new_entry.registers[2], line_entry->operands[0], sizeof(new_entry.registers[2])-1);
@@ -215,7 +220,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address, i
     
     // --- push rX -> subi r30, r30, 8; st rX, r30, 0 ---
     if (strcmp(line_entry->opcode, "push") == 0) {
-        // First: subi r30, r30, 8
+        // First instruction: subi r30, r30, 8
         strcpy(new_entry.opcode, "subi");
         strcpy(new_entry.registers[0], "r30");
         strcpy(new_entry.registers[1], "r30");
@@ -224,7 +229,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address, i
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
-        // Second: st rX, r30, 0
+        // Second instruction: st rX, r30, 0
         memset(&new_entry, 0, sizeof(Line));
         new_entry.type = 'I';
         strcpy(new_entry.opcode, "st");
@@ -300,10 +305,10 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address, i
         memset(&new_entry, 0, sizeof(Line));
         new_entry.type = 'I';
         strcpy(new_entry.opcode, "br");
-        // Save the label operand (for example, ":func")
+        // Save the label operand (e.g. ":func")
         strncpy(new_entry.label, line_entry->operands[0], sizeof(new_entry.label)-1);
         new_entry.operand_count = 0;
-        new_entry.from_call = 1;  // Mark that this branch came from a call macro
+        new_entry.from_call = 1;  // Mark branch coming from a call macro
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
@@ -346,22 +351,20 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address, i
 }
 
 // --- Second Pass: Resolve label operands ---
-// For every instruction that has a label operand (starting with ':'),
-// look up the label in the label table and replace it with its hexadecimal address.
-// For branch instructions generated by a call macro (from_call==1), subtract 8 from the resolved address.
+// For any instruction with a label operand (starting with ':'), look up its address and replace it.
+// (For call-generated branches, subtract 8 from the resolved address.)
 void resolve_labels(ArrayList *instructions, LabelTable *labels) {
     for (int i = 0; i < instructions->size; i++) {
         Line *line = &instructions->lines[i];
         if (line->label[0] == ':') {
             char label_name[20];
-            strcpy(label_name, line->label + 1);
+            strcpy(label_name, line->label + 1); // Skip the colon
             int addr = get_label_address(labels, label_name);
             if (addr == -1) {
                 fprintf(stderr, "Error: Undefined label %s\n", line->label);
             } else {
-                // If this branch came from a call macro, adjust the address by subtracting 8.
                 if (line->from_call)
-                    addr -= 8;
+                    addr -= 8;  // Adjust branch target for call macro
                 snprintf(line->label, sizeof(line->label), "0x%X", addr);
             }
         }
@@ -369,10 +372,8 @@ void resolve_labels(ArrayList *instructions, LabelTable *labels) {
 }
 
 // --- Write final output file ---
-// Each line is printed with its PC address (in hex) followed by the instruction or data literal.
-// In this output, we do not reinsert section directives; the entire output is a list of addresses.
-// --- Write final output file ---
-// Instead of printing memory addresses, output the proper assembly code with section directives and tab indents.
+// Instead of outputting memory addresses, print proper assembly with section directives
+// and a tab indent before each instruction or data literal.
 void write_output_file(const char *output_filename, ArrayList *instructions) {
     FILE *fp = fopen(output_filename, "w");
     if (!fp) {
@@ -381,12 +382,8 @@ void write_output_file(const char *output_filename, ArrayList *instructions) {
     }
     
     char current_section = '\0';
-    
-    // Process each instruction/data item in order.
     for (int i = 0; i < instructions->size; i++) {
         Line *line = &instructions->lines[i];
-        
-        // When the section changes, output the appropriate directive.
         if (line->type != current_section) {
             if (line->type == 'I')
                 fprintf(fp, ".code\n");
@@ -394,11 +391,7 @@ void write_output_file(const char *output_filename, ArrayList *instructions) {
                 fprintf(fp, ".data\n");
             current_section = line->type;
         }
-        
-        // Begin the line with a tab indent.
         fprintf(fp, "\t");
-        
-        // Output code instructions.
         if (line->type == 'I') {
             if (strcmp(line->opcode, "xor") == 0) {
                 fprintf(fp, "xor %s, %s, %s", 
@@ -412,13 +405,11 @@ void write_output_file(const char *output_filename, ArrayList *instructions) {
             } else if (strcmp(line->opcode, "trap") == 0) {
                 fprintf(fp, "trap %d", line->literal);
             } else if (strcmp(line->opcode, "br") == 0) {
-                // The branch instruction operand may have been resolved to a hexadecimal address.
                 if (line->label[0] != '\0')
                     fprintf(fp, "br %s", line->label);
                 else
                     fprintf(fp, "br %s", line->registers[0]);
             } else {
-                // For any other opcode, print the opcode and any operands.
                 fprintf(fp, "%s", line->opcode);
                 for (int j = 0; j < line->operand_count; j++) {
                     if (j == 0)
@@ -427,13 +418,10 @@ void write_output_file(const char *output_filename, ArrayList *instructions) {
                         fprintf(fp, ", %s", line->operands[j]);
                 }
             }
-        }
-        // Output data literals.
-        else if (line->type == 'D') {
+        } else if (line->type == 'D') {
             fprintf(fp, "%d", line->literal);
         }
         fprintf(fp, "\n");
     }
-    
     fclose(fp);
 }
