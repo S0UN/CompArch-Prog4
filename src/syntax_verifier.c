@@ -929,7 +929,6 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
     fclose(fp);
     return 0;
 }
-
 int process_file_second_pass(const char *input_filename, ArrayList *lines, LabelTable *labels, int *address) {
     FILE *fp = fopen(input_filename, "r");
     if (!fp) {
@@ -953,10 +952,28 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
         // Handle section directives.
         if (strncmp(buffer, ".code", 5) == 0) {
             in_code_section = 1;
+            
+            // Add .code directive to the array list
+            Line section_line;
+            memset(&section_line, 0, sizeof(Line));
+            strcpy(section_line.opcode, ".code");
+            section_line.type = 'I'; // Mark as instruction section
+            section_line.program_counter = *address;
+            add_to_arraylist(lines, section_line);
+
             continue;
         }
         if (strncmp(buffer, ".data", 5) == 0) {
             in_code_section = 0;
+            
+            // Add .data directive to the array list
+            Line section_line;
+            memset(&section_line, 0, sizeof(Line));
+            strcpy(section_line.opcode, ".data");
+            section_line.type = 'D'; // Mark as data section
+            section_line.program_counter = *address;
+            add_to_arraylist(lines, section_line);
+
             continue;
         }
 
@@ -1091,14 +1108,11 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
     {
         Line *line = &instructions->lines[i];
 
-        // Check for section change and print the directive without indentation
-        if (line->type != current_section)
+        // If it's .code or .data, print without indentation
+        if (strcasecmp(line->opcode, ".code") == 0 || strcasecmp(line->opcode, ".data") == 0)
         {
-            if (line->type == 'I')
-                fprintf(fp, ".code\n");
-            else if (line->type == 'D')
-                fprintf(fp, ".data\n");
-            current_section = line->type;
+            fprintf(fp, "%s\n", line->opcode);
+            continue;
         }
 
         // Indent instructions with a tab

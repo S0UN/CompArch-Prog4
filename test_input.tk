@@ -1,11 +1,7 @@
-.data 
-    32132
-    12
-    12
-    12
-
-.data
-    213
-    2
-    31
-    
+.code
+    add r1, r2, r3   
+:label1
+    sub r4, r5, r6      
+    br :label2       
+:label2
+    mul r7, r8, r9      ; PC 
