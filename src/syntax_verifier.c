@@ -358,7 +358,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         strcpy(new_entry.operands[0], "r0");
         strcpy(new_entry.operands[1], "r0");
         strcpy(new_entry.operands[2], "r0");
-        new_entry.literal = 0x0; // Immediate value
+        new_entry.literal = 0x0;
         new_entry.operand_count = 4;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
@@ -369,7 +369,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
     {
         // push rd -> mov (r31)(-8), rd → subi r31, 8
         strcpy(new_entry.opcode, "mov");
-        strcpy(new_entry.operands[0], "(r31)(-8)");
+        snprintf(new_entry.operands[0], sizeof(new_entry.operands[0]), "(r31)(-8)");
         strncpy(new_entry.operands[1], line_entry->operands[0], sizeof(new_entry.operands[1]) - 1);
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
@@ -393,7 +393,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         // pop rd -> mov rd, (r31)(0) → addi r31, 8
         strcpy(new_entry.opcode, "mov");
         strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-        strcpy(new_entry.operands[1], "(r31)(0)");
+        snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "(r31)(0)");
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
@@ -440,44 +440,47 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         return;
     }
     else if (strcasecmp(line_entry->opcode, "ld") == 0)
-    {
-        // ld rd, L -> Sequence of xor, addi, shftli to load L into rd
-        long long value = atoll(line_entry->operands[1]);
+{
+    // ld rd, L -> Load 48-bit address L into rd
+    long long value = atoll(line_entry->operands[1]);
 
-        // Clear rd first
-        strcpy(new_entry.opcode, "xor");
+    // Step 1: Clear rd (xor rd, rd, rd)
+    strcpy(new_entry.opcode, "xor");
+    strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+    strncpy(new_entry.operands[1], new_entry.operands[0], sizeof(new_entry.operands[1]) - 1);
+    strncpy(new_entry.operands[2], new_entry.operands[0], sizeof(new_entry.operands[2]) - 1);
+    new_entry.operand_count = 3;
+    new_entry.program_counter = (*address);
+    add_to_arraylist(instruction_list, new_entry);
+    (*address) += 4;
+
+    // Step 2: Load the value bit by bit
+    for (int shift = 40; shift >= 0; shift -= 12)
+    {
+        // Left shift by 12
+        memset(&new_entry, 0, sizeof(Line));
+        new_entry.type = 'I';
+        strcpy(new_entry.opcode, "shftli");
         strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-        strncpy(new_entry.operands[1], new_entry.operands[0], sizeof(new_entry.operands[1]) - 1);
-        strncpy(new_entry.operands[2], new_entry.operands[0], sizeof(new_entry.operands[2]) - 1);
-        new_entry.operand_count = 3;
+        snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%d", 12);
+        new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
 
-        // Load immediate value in steps
-        for (int shift = 40; shift >= 4; shift -= 12)
-        {
-            memset(&new_entry, 0, sizeof(Line));
-            new_entry.type = 'I';
-            strcpy(new_entry.opcode, "shftli");
-            strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-            new_entry.literal = 12;
-            new_entry.operand_count = 2;
-            new_entry.program_counter = (*address);
-            add_to_arraylist(instruction_list, new_entry);
-            (*address) += 4;
-
-            memset(&new_entry, 0, sizeof(Line));
-            new_entry.type = 'I';
-            strcpy(new_entry.opcode, "addi");
-            strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-            new_entry.literal = (value >> shift) & 0xFFF;
-            new_entry.operand_count = 2;
-            new_entry.program_counter = (*address);
-            add_to_arraylist(instruction_list, new_entry);
-            (*address) += 4;
-        }
+        // Add the next chunk of L
+        memset(&new_entry, 0, sizeof(Line));
+        new_entry.type = 'I';
+        strcpy(new_entry.opcode, "addi");
+        strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+        snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%lld", (value >> shift) & 0xFFF);
+        new_entry.operand_count = 2;
+        new_entry.program_counter = (*address);
+        add_to_arraylist(instruction_list, new_entry);
+        (*address) += 4;
     }
+}
+
 }
 
 
@@ -625,8 +628,6 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
     fclose(fp);
     return 0;
 }
-
-/* -------------------- write_output_file() -------------------- */
 void write_output_file(const char *output_filename, ArrayList *instructions)
 {
     FILE *fp = fopen(output_filename, "w");
@@ -640,6 +641,8 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
     for (int i = 0; i < instructions->size; i++)
     {
         Line *line = &instructions->lines[i];
+
+        // Ensure we switch sections when needed
         if (line->type != current_section)
         {
             if (line->type == 'I')
@@ -648,37 +651,48 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
                 fprintf(fp, ".data\n");
             current_section = line->type;
         }
-        fprintf(fp, "\t");
+
+        fprintf(fp, "\t"); // Indentation for clarity
+
+        // Handle different instruction formats appropriately
         if ((strcasecmp(line->opcode, "addi") == 0 || strcasecmp(line->opcode, "subi") == 0) && line->operand_count == 2)
         {
-            fprintf(fp, "%s %s, %d", line->opcode, line->registers[0], line->literal);
+            fprintf(fp, "%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
         }
-
         else if (strcasecmp(line->opcode, "mov") == 0 && line->operand_count == 2)
         {
             fprintf(fp, "mov %s, %s", line->operands[0], line->operands[1]);
         }
-        else if (strcasecmp(line->opcode, "xor") == 0)
+        else if (strcasecmp(line->opcode, "xor") == 0 && line->operand_count == 3)
         {
-            fprintf(fp, "xor %s, %s, %s", line->registers[0], line->registers[1], line->registers[2]);
+            fprintf(fp, "xor %s, %s, %s", line->operands[0], line->operands[1], line->operands[2]);
+        }
+        else if (strcasecmp(line->opcode, "shftli") == 0 && line->operand_count == 2)
+        {
+            fprintf(fp, "shftli %s, %s", line->operands[0], line->operands[1]);
         }
         else if (strcasecmp(line->opcode, "st") == 0 || strcasecmp(line->opcode, "ld") == 0)
         {
-            fprintf(fp, "%s %s, %s, %d", line->opcode, line->registers[0], line->registers[1], line->literal);
+            fprintf(fp, "%s %s, %s, %s", line->opcode, line->operands[0], line->operands[1], line->operands[2]);
         }
         else if (strcasecmp(line->opcode, "trap") == 0)
         {
-            fprintf(fp, "trap %d", line->literal);
+            fprintf(fp, "trap %s", line->operands[0]);
         }
         else if (strcasecmp(line->opcode, "br") == 0)
         {
             if (line->label[0] != '\0')
                 fprintf(fp, "br %s", line->label);
             else
-                fprintf(fp, "br %s", line->registers[0]);
+                fprintf(fp, "br %s", line->operands[0]);
+        }
+        else if (strcasecmp(line->opcode, "priv") == 0 && line->operand_count == 4)
+        {
+            fprintf(fp, "priv %s, %s, %s, %s", line->operands[0], line->operands[1], line->operands[2], line->operands[3]);
         }
         else
         {
+            // Generic format for any other instruction
             fprintf(fp, "%s", line->opcode);
             for (int j = 0; j < line->operand_count; j++)
             {
@@ -688,7 +702,8 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
                     fprintf(fp, ", %s", line->operands[j]);
             }
         }
-        fprintf(fp, "\n");
+
+        fprintf(fp, "\n"); // Move to the next line after instruction
     }
     fclose(fp);
 }

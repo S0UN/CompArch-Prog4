@@ -1,2 +1,13 @@
 .code
+	xor r0, r0, r0
+	xor r5, r5, r5
+	shftli r5, 12
+	addi r5, 0
+	shftli r5, 12
+	addi r5, 0
+	shftli r5, 12
+	addi r5, 0
+	shftli r5, 12
+	addi r5, 0
+	br r5
 	priv r0, r0, r0, 
