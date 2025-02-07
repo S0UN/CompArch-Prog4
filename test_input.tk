@@ -1,7 +1,2 @@
 .code
-    mov r1, 5      ; Load nonzero value
-    br :skip ; Should not branch since r2 = 0
-    add r3, r3, r3  ; This executes
-
-:skip
-    add r4, r4, r4  ; Execution reaches here normally
+    in r2, r3

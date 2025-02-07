@@ -197,32 +197,40 @@ int validate_spacing(char *line)
     free(copy);
     return 1;
 }
-
 bool validate_macro_instruction(const char *line)
 {
-    // Make a temporary copy since strtok modifies the string.
     char buf[300];
+    // Copy the input line into a local buffer.
     strncpy(buf, line, sizeof(buf));
     buf[sizeof(buf) - 1] = '\0';
-    trim_whitespace(buf); // Ensure no extra whitespace
+    trim_whitespace(buf); // Remove any extra whitespace
 
-    // Tokenize the line.
+    // Tokenize to get the opcode.
     char *opcode = strtok(buf, " \t");
     if (!opcode)
-    {
         error("Empty macro instruction");
-    }
 
     int operandCount = 0;
-    char *operands[3]; // Maximum of 2 operands expected for these macros.
+    // We expect at most 2 operands for these macros (with a little extra space if needed)
+    char *operands[3];
     char *token = strtok(NULL, " \t,");
     while (token != NULL && operandCount < 3)
     {
-        operands[operandCount++] = token;
+        // Duplicate and trim each token so we ignore extra spaces.
+        char *trimmed = strdup(token);
+        if (!trimmed)
+            error("Memory allocation failed in macro validation");
+        trim_whitespace(trimmed);
+        // Only store nonempty tokens.
+        if (strlen(trimmed) > 0) {
+            operands[operandCount++] = trimmed;
+        } else {
+            free(trimmed);
+        }
         token = strtok(NULL, " \t,");
     }
 
-    // Now, validate based on the macro opcode.
+    // Now validate based on the opcode:
     if (strcasecmp(opcode, "in") == 0)
     {
         // Expected syntax: in rd, rs
@@ -230,7 +238,6 @@ bool validate_macro_instruction(const char *line)
             error("Macro 'in' requires exactly two operands (rd, rs)");
         if (!isValidRegister(operands[0]) || !isValidRegister(operands[1]))
             error("Macro 'in': both operands must be valid registers");
-        return true;
     }
     else if (strcasecmp(opcode, "out") == 0)
     {
@@ -239,7 +246,6 @@ bool validate_macro_instruction(const char *line)
             error("Macro 'out' requires exactly two operands (rd, rs)");
         if (!isValidRegister(operands[0]) || !isValidRegister(operands[1]))
             error("Macro 'out': both operands must be valid registers");
-        return true;
     }
     else if (strcasecmp(opcode, "clr") == 0)
     {
@@ -248,7 +254,6 @@ bool validate_macro_instruction(const char *line)
             error("Macro 'clr' requires exactly one operand (rd)");
         if (!isValidRegister(operands[0]))
             error("Macro 'clr': operand must be a valid register");
-        return true;
     }
     else if (strcasecmp(opcode, "ld") == 0)
     {
@@ -257,10 +262,9 @@ bool validate_macro_instruction(const char *line)
             error("Macro 'ld' requires exactly two operands (rd, literal)");
         if (!isValidRegister(operands[0]))
             error("Macro 'ld': first operand must be a valid register");
-        // For the literal, do a simple check: first character should be a digit or '-' followed by a digit.
+        // For literal, perform a basic check: first character should be a digit or '-' followed by a digit.
         if (!(isdigit(operands[1][0]) || (operands[1][0] == '-' && isdigit(operands[1][1]))))
             error("Macro 'ld': second operand must be a literal number");
-        return true;
     }
     else if (strcasecmp(opcode, "push") == 0)
     {
@@ -269,7 +273,6 @@ bool validate_macro_instruction(const char *line)
             error("Macro 'push' requires exactly one operand (rd)");
         if (!isValidRegister(operands[0]))
             error("Macro 'push': operand must be a valid register");
-        return true;
     }
     else if (strcasecmp(opcode, "pop") == 0)
     {
@@ -278,13 +281,27 @@ bool validate_macro_instruction(const char *line)
             error("Macro 'pop' requires exactly one operand (rd)");
         if (!isValidRegister(operands[0]))
             error("Macro 'pop': operand must be a valid register");
-        return true;
+    }
+    else if (strcasecmp(opcode, "halt") == 0)
+    {
+        // Expected syntax: halt (no operands)
+        if (operandCount != 0)
+            error("Macro 'halt' takes no operands");
     }
     else
     {
+        for (int i = 0; i < operandCount; i++) {
+            free(operands[i]);
+        }
         error("Unknown macro instruction");
     }
-    return false; // Should never be reached.
+
+    // Free any allocated tokens.
+    for (int i = 0; i < operandCount; i++) {
+        free(operands[i]);
+    }
+
+    return true;
 }
 
 /* -------------------- validate_instruction() -------------------- */
@@ -737,8 +754,8 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
         printf("\nDEBUG: Tokenized Instruction -> %s\n", token);
 
         if (validate_macro(token))
-        {
-            validate_macro_instruction(original_buffer);
+        {   
+           // validate_macro_instruction(original_buffer);
 
             strcpy(line_entry.opcode, token);
             int opCount = 0;
