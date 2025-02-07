@@ -4,10 +4,10 @@
 #include "uthash.h"
 
 typedef struct {
-    char label[20];       // Label name (e.g., "func")
-    int address;          // Memory address (e.g., 0x1030)
-    int in_code_section;  // 1 if defined in code, 0 if defined in data
-    UT_hash_handle hh;
+    char label[20];       // Label name (e.g., "L1")
+    int address;          // Memory address (e.g., 0x100C)
+    int in_code_section;  // 1 if in .code section, 0 if in .data section
+    UT_hash_handle hh;    // Hash table handle
 } LabelTable;
 
 void store_label(LabelTable **labels, const char *label, int address, int in_code_section);

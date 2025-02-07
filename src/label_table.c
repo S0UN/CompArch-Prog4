@@ -17,7 +17,7 @@ void store_label(LabelTable **labels, const char *label, int address, int in_cod
     }
     strcpy(entry->label, label);
     entry->address = address;
-    entry->in_code_section = in_code_section;  // Use the current section flag (not the negation!)
+    entry->in_code_section = in_code_section;  
     HASH_ADD_STR(*labels, label, entry);
 }
 

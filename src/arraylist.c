@@ -7,6 +7,10 @@ void initialize_arraylist(ArrayList *arr) {
     arr->capacity = 10;
     arr->size = 0;
     arr->lines = (Line *)malloc(arr->capacity * sizeof(Line));
+    if (!arr->lines) {
+        perror("Failed to allocate memory for ArrayList");
+        exit(EXIT_FAILURE);
+    }
 }
 
 // Add an instruction or literal to the ArrayList
@@ -14,6 +18,10 @@ void add_to_arraylist(ArrayList *arr, Line entry) {
     if (arr->size >= arr->capacity) {
         arr->capacity *= 2;
         arr->lines = (Line *)realloc(arr->lines, arr->capacity * sizeof(Line));
+        if (!arr->lines) {
+            perror("Failed to reallocate memory for ArrayList");
+            exit(EXIT_FAILURE);
+        }
     }
     arr->lines[arr->size++] = entry;
 }
