@@ -26,6 +26,7 @@ void error(const char *message);
 
 
 bool isLabelSyntax(const char* operand);
+void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *address, LabelTable *labels) ;
 
 /* Expands macro instructions (clr, push, pop, out, in, ld) into multiple instructions.
 */

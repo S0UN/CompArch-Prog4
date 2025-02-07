@@ -1,2 +1,2 @@
-.data
-    9
+.code
+    ld r1, 0x123456789ABC

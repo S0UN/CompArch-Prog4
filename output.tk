@@ -1,2 +1,13 @@
-.data
-	9
+.code
+	xor r1, r1, r1
+	addi r1, 0
+	shftli r1, 12
+	addi r1, 18
+	shftli r1, 12
+	addi r1, 837
+	shftli r1, 12
+	addi r1, 1656
+	shftli r1, 12
+	addi r1, 2475
+	shftli r1, 4
+	addi r1, 12

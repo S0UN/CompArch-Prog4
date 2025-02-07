@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "syntax_verifier.h": "c",
-        "label_table.h": "c"
+        "label_table.h": "c",
+        "strings.h": "c"
     }
 }

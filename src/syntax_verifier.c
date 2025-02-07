@@ -1,10 +1,45 @@
 #include "syntax_verifier.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <ctype.h>
 #include <stdbool.h>
 #include <strings.h>
+#include "arraylist.h"
+#include "label_table.h"
+#include "line.h"
+LabelTable *labels = NULL; // Global declaration
+
+
+int main(int argc, char *argv[])
+{
+    if (argc != 3) {
+        printf("Usage: %s <input_file> <output_file>\n", argv[0]);
+        return 1;
+    }
+
+    ArrayList instructions;
+    initialize_arraylist(&instructions);
+
+
+    if (process_file(argv[1], &instructions, &labels) != 0) {
+        printf("Error processing file.\n");
+        free_arraylist(&instructions);
+        free_label_table(labels);
+        return 1;
+    }
+
+    // IMPORTANT: Resolve all label operands before writing output.
+    resolve_labels(&instructions, labels);
+
+    write_output_file(argv[2], &instructions);
+
+    free_arraylist(&instructions);
+    free_label_table(labels);
+
+    return 0;
+}
+
+
 
 /* -------------------- Helper Functions -------------------- */
 void trim_whitespace(char *line)
@@ -661,73 +696,117 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         (*address) += 4;
         return;
     }
-    else if (strcasecmp(line_entry->opcode, "ld") == 0)
-    {
-        // ld rd, L -> Load literal L into rd using a sequence of instructions.
-        // Convert the second operand to a long long value (assumed to be decimal).
-        long long value = atoll(line_entry->operands[1]);
+    // Inside process_file() or similar:
+if (strcasecmp(line_entry->opcode, "ld") == 0) {
+    expand_ld_instruction(line_entry, instruction_list, address, labels);
+}
 
-        // Step 1: Clear rd: xor rd, rd, rd
-        strcpy(new_entry.opcode, "xor");
-        // Use the first operand (rd) for all register fields
+
+    // If the instruction is not a defined macro, do nothing.
+}
+void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *address, LabelTable *labels) {
+    long long value;
+
+    // If the literal operand starts with a colon, resolve it as a label.
+    if (line_entry->operands[1][0] == ':') {
+        char lbl[20];
+        strcpy(lbl, line_entry->operands[1] + 1); // Remove the colon.
+        trim_whitespace(lbl);
+        int addr = get_label_address(labels, lbl);
+        if (addr == -1) {
+            fprintf(stderr, "Undefined label: %s\n", lbl);
+            exit(EXIT_FAILURE);
+        }
+        value = addr;
+    } else {
+        value = strtoll(line_entry->operands[1], NULL, 0); // Parse immediate value
+    }
+
+    // Step 1: Clear the register using "xor rd, rd, rd".
+    Line new_entry;
+    memset(&new_entry, 0, sizeof(Line));
+    strcpy(new_entry.opcode, "xor");
+    strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+    strncpy(new_entry.operands[1], line_entry->operands[0], sizeof(new_entry.operands[1]) - 1);
+    strncpy(new_entry.operands[2], line_entry->operands[0], sizeof(new_entry.operands[2]) - 1);
+    new_entry.operand_count = 3;
+    new_entry.program_counter = (*address);
+    new_entry.type = 'I';
+    add_to_arraylist(instruction_list, new_entry);
+    (*address) += 4;
+
+    // Step 2: Now we load the value, split if necessary.
+    // If the literal fits in a 12-bit immediate (0-4095), use a single addi.
+    if (value >= 0 && value <= 4095) {
+        memset(&new_entry, 0, sizeof(Line));
+        new_entry.type = 'I';
+        strcpy(new_entry.opcode, "addi");
         strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-        strncpy(new_entry.operands[1], line_entry->operands[0], sizeof(new_entry.operands[1]) - 1);
-        strncpy(new_entry.operands[2], line_entry->operands[0], sizeof(new_entry.operands[2]) - 1);
-        new_entry.operand_count = 3;
+        snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%lld", value);
+        new_entry.operand_count = 2;
+        new_entry.program_counter = (*address);
+        add_to_arraylist(instruction_list, new_entry);
+        (*address) += 4;
+    } else {
+        // Step 3: For larger values, split into multiple instructions.
+        // First, load the most significant 12 bits into the register.
+        memset(&new_entry, 0, sizeof(Line));
+        new_entry.type = 'I';
+        strcpy(new_entry.opcode, "addi");
+        strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+        snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%lld", (value >> 52) & 0xFFF);
+        new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
 
-        // If the literal fits in a 12-bit unsigned immediate (0-4095),
-        // then load it in a single addi instruction.
-        if (value >= 0 && value <= 4095)
-        {
+        // Step 4: Process the remaining chunks in 12-bit chunks.
+        for (int shift = 40; shift >= 4; shift -= 12) {
+            // Shift and add the next chunk of value.
+            memset(&new_entry, 0, sizeof(Line));
+            new_entry.type = 'I';
+            strcpy(new_entry.opcode, "shftli");
+            strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+            snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "12");
+            new_entry.operand_count = 2;
+            new_entry.program_counter = (*address);
+            add_to_arraylist(instruction_list, new_entry);
+            (*address) += 4;
+
             memset(&new_entry, 0, sizeof(Line));
             new_entry.type = 'I';
             strcpy(new_entry.opcode, "addi");
-            // Use the target register (rd)
             strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-            // Print the immediate as a decimal string.
-            snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%lld", value);
+            snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%lld", (value >> shift) & 0xFFF);
             new_entry.operand_count = 2;
             new_entry.program_counter = (*address);
             add_to_arraylist(instruction_list, new_entry);
             (*address) += 4;
         }
-        else
-        {
-            // Otherwise, load the literal in 12-bit chunks using a loop.
-            // (This is a simplified method to load a 48-bit literal.)
-            for (int shift = 40; shift >= 0; shift -= 12)
-            {
-                memset(&new_entry, 0, sizeof(Line));
-                new_entry.type = 'I';
-                strcpy(new_entry.opcode, "shftli");
-                // Operand 0 is the register (rd)
-                strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-                // Operand 1 is the shift amount, here hardcoded as "12"
-                snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "12");
-                new_entry.operand_count = 2;
-                new_entry.program_counter = (*address);
-                add_to_arraylist(instruction_list, new_entry);
-                (*address) += 4;
 
-                memset(&new_entry, 0, sizeof(Line));
-                new_entry.type = 'I';
-                strcpy(new_entry.opcode, "addi");
-                strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-                // Compute the next 12-bit chunk and print it in decimal.
-                snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%lld", (value >> shift) & 0xFFF);
-                new_entry.operand_count = 2;
-                new_entry.program_counter = (*address);
-                add_to_arraylist(instruction_list, new_entry);
-                (*address) += 4;
-            }
-        }
+        // Step 5: Finally, load the last 4 bits.
+        memset(&new_entry, 0, sizeof(Line));
+        new_entry.type = 'I';
+        strcpy(new_entry.opcode, "shftli");
+        strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+        snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "4");
+        new_entry.operand_count = 2;
+        new_entry.program_counter = (*address);
+        add_to_arraylist(instruction_list, new_entry);
+        (*address) += 4;
+
+        memset(&new_entry, 0, sizeof(Line));
+        new_entry.type = 'I';
+        strcpy(new_entry.opcode, "addi");
+        strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+        snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%lld", value & 0xF);
+        new_entry.operand_count = 2;
+        new_entry.program_counter = (*address);
+        add_to_arraylist(instruction_list, new_entry);
+        (*address) += 4;
     }
-
-    // If the instruction is not a defined macro, do nothing.
 }
+
 
 /* -------------------- resolve_labels() -------------------- */
 void resolve_labels(ArrayList *instructions, LabelTable *labels)
