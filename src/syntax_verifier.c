@@ -192,17 +192,20 @@ bool validate_instruction(const char *line)
                 error("Arithmetic instructions: all operands must be registers");
         }
     }
-    // Immediate Arithmetic Instructions: addi, subi
-    else if (strcasecmp(opcode, "addi") == 0 ||
-             strcasecmp(opcode, "subi") == 0)
-    {
-        if (operandCount != 3)
-            error("Immediate arithmetic instructions require three operands (rd, rs, imm)");
-        if (!isValidRegister(operands[0]) || !isValidRegister(operands[1]))
-            error("addi/subi: first two operands must be registers");
-        if (!isValidImmediate(operands[2]))
-            error("addi/subi: third operand must be an immediate");
-    }
+// Immediate Arithmetic Instructions: addi, subi
+else if (strcasecmp(opcode, "addi") == 0 ||
+         strcasecmp(opcode, "subi") == 0)
+{
+    if (operandCount != 2) // ✅ Should expect only 2 operands: rd, L
+        error("Immediate arithmetic instructions require two operands (rd, imm)");
+
+    if (!isValidRegister(operands[0])) // ✅ Only one register (rd)
+        error("addi/subi: first operand must be a register");
+
+    if (!isValidImmediate(operands[1])) // ✅ Second operand must be an immediate (L)
+        error("addi/subi: second operand must be an immediate");
+}
+
     // Logical Operations: xor, and, or
     else if (strcasecmp(opcode, "xor") == 0 ||
              strcasecmp(opcode, "and") == 0 ||
@@ -383,6 +386,16 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         (*address) += 4;
         return;
     }
+    else if (strcasecmp(line_entry->opcode, "halt") == 0) // 🔥 NEW MACRO FOR halt
+    {
+        strcpy(new_entry.opcode, "trap");
+        new_entry.literal = 0; // halt is equivalent to trap 0x0
+        new_entry.operand_count = 1;
+        new_entry.program_counter = (*address);
+        add_to_arraylist(instruction_list, new_entry);
+        (*address) += 4;
+        return;
+    }
     else if (strcasecmp(line_entry->opcode, "push") == 0)
     {
         strcpy(new_entry.opcode, "subi");
@@ -464,47 +477,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         (*address) += 4;
         return;
     }
-    else if (strcasecmp(line_entry->opcode, "ld") == 0) // 🔥 NEW MACRO FOR ld rX, L
-    {
-        int literal = atoi(line_entry->operands[1]); // Convert L to integer
-        int upper = (literal >> 16) & 0xFFFF; // Extract upper 16 bits
-        int lower = literal & 0xFFFF; // Extract lower 16 bits
-
-        if (literal >= -2048 && literal <= 2047) // ✅ Can fit in an immediate
-        {
-            strcpy(new_entry.opcode, "addi");
-            strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0]) - 1);
-            strcpy(new_entry.registers[1], "r0"); // Load from zero register
-            new_entry.literal = literal;
-            new_entry.operand_count = 2;
-            new_entry.program_counter = (*address);
-            add_to_arraylist(instruction_list, new_entry);
-            (*address) += 4;
-        }
-        else // 🔥 Need multiple instructions to load a large literal
-        {
-            strcpy(new_entry.opcode, "shftl");
-            strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0]) - 1);
-            strncpy(new_entry.registers[1], "r0", sizeof(new_entry.registers[1]) - 1); // Start from 0
-            new_entry.literal = 16;
-            new_entry.operand_count = 2;
-            new_entry.program_counter = (*address);
-            add_to_arraylist(instruction_list, new_entry);
-            (*address) += 4;
-
-            strcpy(new_entry.opcode, "or");
-            strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0]) - 1);
-            strncpy(new_entry.registers[1], line_entry->operands[0], sizeof(new_entry.registers[1]) - 1);
-            new_entry.literal = lower;
-            new_entry.operand_count = 2;
-            new_entry.program_counter = (*address);
-            add_to_arraylist(instruction_list, new_entry);
-            (*address) += 4;
-        }
-        return;
-    }
 }
-
 
 void error(const char *message)
 {
