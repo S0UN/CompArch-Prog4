@@ -38,6 +38,7 @@ bool isValidRegister(const char *reg)
     long num = strtol(reg + 1, &endptr, 10);
     return (*endptr == '\0' && num >= 0 && num <= 31);
 }
+
 bool isValidImmediate(const char *imm, bool allow_negative, int bit_size)
 {
     while (isspace((unsigned char)*imm))
@@ -55,48 +56,43 @@ bool isValidImmediate(const char *imm, bool allow_negative, int bit_size)
     }
 
     long min_val, max_val;
-
     if (bit_size == 12)
     { // 12-bit immediate range
         if (allow_negative)
         {
-            min_val = -2048; // 2's complement signed 12-bit
+            min_val = -2048;
             max_val = 2047;
         }
         else
         {
             min_val = 0;
-            max_val = 4095; // Unsigned 12-bit
+            max_val = 4095;
         }
     }
     else if (bit_size == 5)
-    { // 🔥 Add case for 5-bit immediate range
+    { // 5-bit immediate range
         min_val = 0;
-        max_val = 31; // 5-bit unsigned values: 0-31
+        max_val = 31;
     }
     else
     {
-        return false; // Unsupported immediate size
+        return false;
     }
 
     long val;
     char *endptr;
-
     if (imm[0] == '0' && (imm[1] == 'x' || imm[1] == 'X'))
     {
-        val = strtol(imm + 2, &endptr, 16); // Parse as hex
+        val = strtol(imm + 2, &endptr, 16);
     }
     else
     {
-        val = strtol(imm, &endptr, 10); // Parse as decimal
+        val = strtol(imm, &endptr, 10);
     }
-
-    if (*endptr != '\0') // If invalid characters remain, return false
+    if (*endptr != '\0')
         return false;
-
     if (neg)
         val = -val;
-
     return (val >= min_val && val <= max_val);
 }
 
@@ -182,11 +178,8 @@ bool validate_instruction(const char *line)
     int operandCount = 0;
     printf("[%s]\n", line);
 
-    // Copy line so original is not modified
     char temp[300];
     strcpy(temp, line);
-
-    // Tokenize the first word (opcode)
     char *token = strtok(temp, " \t");
     if (!token)
     {
@@ -197,7 +190,6 @@ bool validate_instruction(const char *line)
 
     printf("\nDEBUG: Tokenized Opcode -> %s\n", opcode);
 
-    // Extract operands (same way as process_file)
     while ((token = strtok(NULL, " \t,")) != NULL && operandCount < 4)
     {
         operands[operandCount] = token;
@@ -207,9 +199,6 @@ bool validate_instruction(const char *line)
 
     printf("DEBUG: Total Operands Found: %d\n", operandCount);
 
-    // === Now, validate based on instruction type ===
-
-    // Arithmetic Instructions: add, sub, mul, div (Require 3 register operands)
     if (strcasecmp(opcode, "add") == 0 ||
         strcasecmp(opcode, "sub") == 0 ||
         strcasecmp(opcode, "mul") == 0 ||
@@ -217,33 +206,28 @@ bool validate_instruction(const char *line)
     {
         if (operandCount != 3)
             error("Arithmetic instructions require three operands (rd, rs, rt)");
-
         for (int i = 0; i < 3; i++)
         {
             if (!isValidRegister(operands[i]))
                 error("Arithmetic instructions: all operands must be registers");
         }
     }
-    // Immediate Arithmetic Instructions: addi, subi (Require 1 register + 1 immediate)
-    else if (strcasecmp(opcode, "addi") == 0 || strcasecmp(opcode, "subi") == 0)
+    else if (strcasecmp(opcode, "addi") == 0 ||
+             strcasecmp(opcode, "subi") == 0)
     {
         if (operandCount != 2)
             error("Immediate arithmetic instructions require two operands (rd, imm)");
-
         if (!isValidRegister(operands[0]))
             error("addi/subi: first operand must be a register");
-
-        if (!isValidImmediate(operands[1], false, 12)) // 🔥 Unsigned 12-bit immediate
+        if (!isValidImmediate(operands[1], false, 12))
             error("addi/subi: second operand must be a 12-bit unsigned immediate");
     }
-    // Logical Operations: xor, and, or
     else if (strcasecmp(opcode, "xor") == 0 ||
              strcasecmp(opcode, "and") == 0 ||
              strcasecmp(opcode, "or") == 0)
     {
         if (operandCount != 3)
             error("Logical operations require three operands (rd, rs, rt)");
-
         for (int i = 0; i < 3; i++)
         {
             if (!isValidRegister(operands[i]))
@@ -254,16 +238,13 @@ bool validate_instruction(const char *line)
     {
         if (operandCount != 2)
             error("not requires two operands (rd, rs)");
-
         if (!isValidRegister(operands[0]) || !isValidRegister(operands[1]))
             error("not: operands must be registers");
     }
-    // Branching and Control Flow: brr, br, call, return
     else if (strcasecmp(opcode, "brr") == 0)
     {
         if (operandCount != 1)
-            error("brr requires one operand (register, label, or immediate)");
-
+            error("brr requires one operand (register, signed immediate, or label)");
         if (!isValidRegister(operands[0]) && !isValidImmediate(operands[0], true, 12) && !isLabelSyntax(operands[0]))
             error("brr: operand must be a register, a 12-bit signed immediate, or a label");
     }
@@ -271,70 +252,69 @@ bool validate_instruction(const char *line)
     {
         if (operandCount != 2)
             error("brnz requires two operands (rd, rs)");
-
         if (!isValidRegister(operands[1]))
             error("brnz: second operand (rs) must be a register");
-
         if (!isValidRegister(operands[0]) && !isLabelSyntax(operands[0]))
             error("brnz: first operand (rd) must be a register or a label");
     }
-
     else if (strcasecmp(opcode, "br") == 0)
     {
         if (operandCount != 1)
             error("br requires one operand (register or label)");
-
         if (!isValidRegister(operands[0]) && !isLabelSyntax(operands[0]))
             error("br: operand must be a register or a label");
     }
-
     else if (strcasecmp(opcode, "call") == 0)
     {
         if (operandCount != 1)
-            error("call requires three operands (r_d, r_s, r_t)");
+            error("call requires one operand (a 12-bit signed immediate or label)");
+        if (!isValidImmediate(operands[0], true, 12) && !isLabelSyntax(operands[0]))
+            error("call: operand must be a 12-bit signed immediate or a label");
     }
     else if (strcasecmp(opcode, "return") == 0)
     {
         if (operandCount != 0)
             error("return takes no operands");
     }
-    // Memory Operations: ld, mov
     else if (strcasecmp(opcode, "ld") == 0)
     {
         if (operandCount != 3)
             error("ld requires three operands (rd, rs, imm)");
-
         if (!isValidRegister(operands[0]) || !isValidRegister(operands[1]))
             error("ld: first two operands must be registers");
-
-        if (!isValidImmediate(operands[2], true, 12)) // 🔥 Signed 12-bit immediate
+        if (!isValidImmediate(operands[2], true, 12))
             error("ld: third operand must be a 12-bit signed immediate");
-    }
-    else if (strcasecmp(opcode, "shftri") == 0 || strcasecmp(opcode, "shftli") == 0)
-    {
-        if (operandCount != 2)
-            error("Shift immediate instructions require two operands (rd, imm)");
-
-        if (!isValidRegister(operands[0]))
-            error("Shift immediate: first operand must be a register");
-
-        if (!isValidImmediate(operands[1], true, 5)) // 🔥 Unsigned 5-bit immediate (for shift amount)
-            error("Shift immediate: second operand must be a 5-bit unsigned immediate");
     }
     else if (strcasecmp(opcode, "mov") == 0)
     {
-        if (operandCount != 2)
-            error("mov requires two operands");
-
-        if (!isValidRegister(operands[0]) && !isValidRegister(operands[1]))
-            error("mov: both operands must be registers");
+        if (operandCount == 2)
+        {
+            if (isValidRegister(operands[0]) && isValidRegister(operands[1]))
+                return true;
+            if (isValidRegister(operands[0]) && isValidImmediate(operands[1], true, 12))
+                return true;
+        }
+        else if (operandCount == 3)
+        {
+            if (isMemoryOperand(operands[0]) && isValidRegister(operands[1]))
+                return true;
+            if (isMemoryOperand(operands[1]) && isValidRegister(operands[0]))
+                return true;
+        }
+        error("mov: Invalid operands. Must be one of: (rd, rs) or (rd, imm) or memory forms.");
+    }
+    else if (strcasecmp(opcode, "brgt") == 0)
+    {
+        if (operandCount != 3)
+            error("brgt requires three operands (rd, rs, rt)");
+        if (!isValidRegister(operands[0]) || !isValidRegister(operands[1]) || !isValidRegister(operands[2]))
+            error("brgt: all operands must be registers");
     }
     else if (strcasecmp(opcode, "trap") == 0)
     {
         if (operandCount != 1)
             error("trap requires one operand (immediate)");
-
-        if (!isValidImmediate(operands[0], false, 12)) // 🔥 Unsigned 12-bit immediate
+        if (!isValidImmediate(operands[0], false, 12))
             error("trap: operand must be a 12-bit unsigned immediate");
     }
     else if (strcasecmp(opcode, "halt") == 0)
@@ -342,11 +322,50 @@ bool validate_instruction(const char *line)
         if (operandCount != 0)
             error("halt takes no operands");
     }
-
+    else if (strcasecmp(opcode, "addf") == 0 ||
+             strcasecmp(opcode, "subf") == 0 ||
+             strcasecmp(opcode, "mulf") == 0 ||
+             strcasecmp(opcode, "divf") == 0)
+    {
+        if (operandCount != 3)
+            error("Floating point instructions require three operands");
+        for (int i = 0; i < 3; i++)
+        {
+            if (!isValidRegister(operands[i]))
+                error("Floating point instructions: operands must be registers");
+        }
+    }
+    else if (strcasecmp(opcode, "shftr") == 0 || strcasecmp(opcode, "shftl") == 0)
+    {
+        if (operandCount != 3)
+            error("Shift instructions require three operands (rd, rs, rt)");
+        for (int i = 0; i < 3; i++)
+        {
+            if (!isValidRegister(operands[i]))
+                error("Shift instructions: operands must be registers");
+        }
+    }
+    else if (strcasecmp(opcode, "shftri") == 0 || strcasecmp(opcode, "shftli") == 0)
+    {
+        if (operandCount != 2)
+            error("Shift immediate instructions require two operands (rd, imm)");
+        if (!isValidRegister(operands[0]))
+            error("Shift immediate: first operand must be a register");
+        if (!isValidImmediate(operands[1], true, 5))
+            error("Shift immediate: second operand must be a 5-bit unsigned immediate");
+    }
     return true;
 }
 
 /* -------------------- expand_macro() -------------------- */
+/* Expands the following macros:
+   - clr rd   → xor rd, rd, rd
+   - push rd  → mov (r31)(-8), rd; subi r31, r31, 8
+   - pop rd   → mov rd, (r31)(0); addi r31, r31, 8
+   - out rs, rt → priv rs, rt, r0, 0x4
+   - in rd    → priv rd, r?, r0, 0x3   (assumes a second register operand is provided)
+   - halt     → trap 0
+*/
 void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
 {
     Line new_entry;
@@ -355,7 +374,6 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
 
     if (strcasecmp(line_entry->opcode, "clr") == 0)
     {
-        // clr rd -> xor rd, rd, rd
         strcpy(new_entry.opcode, "xor");
         strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
         strncpy(new_entry.operands[1], line_entry->operands[0], sizeof(new_entry.operands[1]) - 1);
@@ -368,13 +386,10 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
     }
     else if (strcasecmp(line_entry->opcode, "halt") == 0)
     {
-        // halt -> priv r0, r0, r0, 0x0
-        strcpy(new_entry.opcode, "priv");
-        strcpy(new_entry.operands[0], "r0");
-        strcpy(new_entry.operands[1], "r0");
-        strcpy(new_entry.operands[2], "r0");
-        new_entry.literal = 0x0;
-        new_entry.operand_count = 4;
+        // halt -> trap 0
+        strcpy(new_entry.opcode, "trap");
+        strcpy(new_entry.operands[0], "0");
+        new_entry.operand_count = 1;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
@@ -382,7 +397,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
     }
     else if (strcasecmp(line_entry->opcode, "push") == 0)
     {
-        // push rd -> mov (r31)(-8), rd → subi r31, 8
+        // push rd -> mov (r31)(-8), rd; subi r31, r31, 8
         strcpy(new_entry.opcode, "mov");
         snprintf(new_entry.operands[0], sizeof(new_entry.operands[0]), "(r31)(-8)");
         strncpy(new_entry.operands[1], line_entry->operands[0], sizeof(new_entry.operands[1]) - 1);
@@ -405,7 +420,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
     }
     else if (strcasecmp(line_entry->opcode, "pop") == 0)
     {
-        // pop rd -> mov rd, (r31)(0) → addi r31, 8
+        // pop rd -> mov rd, (r31)(0); addi r31, r31, 8
         strcpy(new_entry.opcode, "mov");
         strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
         snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "(r31)(0)");
@@ -433,7 +448,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
         strncpy(new_entry.operands[1], line_entry->operands[1], sizeof(new_entry.operands[1]) - 1);
         strcpy(new_entry.operands[2], "r0");
-        new_entry.literal = 0x4;
+        snprintf(new_entry.operands[3], sizeof(new_entry.operands[3]), "0x4");
         new_entry.operand_count = 4;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
@@ -442,12 +457,13 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
     }
     else if (strcasecmp(line_entry->opcode, "in") == 0)
     {
-        // in rs, rt -> priv rs, rt, r0, 0x3
+        // in rd -> priv rd, r?, r0, 0x3 (assume the second operand is provided in the source code)
+        // For this example, we assume the syntax "in rd, rX" where rX is provided.
         strcpy(new_entry.opcode, "priv");
         strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
         strncpy(new_entry.operands[1], line_entry->operands[1], sizeof(new_entry.operands[1]) - 1);
         strcpy(new_entry.operands[2], "r0");
-        new_entry.literal = 0x3;
+        snprintf(new_entry.operands[3], sizeof(new_entry.operands[3]), "0x3");
         new_entry.operand_count = 4;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
@@ -456,34 +472,32 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
     }
     else if (strcasecmp(line_entry->opcode, "ld") == 0)
     {
-        // ld rd, L -> Load 48-bit address L into rd
+        // ld rd, L -> Load literal L into rd using a sequence of instructions.
         long long value = atoll(line_entry->operands[1]);
 
-        // Step 1: Clear rd (xor rd, rd, rd)
+        // Clear rd: xor rd, rd, rd
         strcpy(new_entry.opcode, "xor");
         strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-        strncpy(new_entry.operands[1], new_entry.operands[0], sizeof(new_entry.operands[1]) - 1);
-        strncpy(new_entry.operands[2], new_entry.operands[0], sizeof(new_entry.operands[2]) - 1);
+        strncpy(new_entry.operands[1], line_entry->operands[0], sizeof(new_entry.operands[1]) - 1);
+        strncpy(new_entry.operands[2], line_entry->operands[0], sizeof(new_entry.operands[2]) - 1);
         new_entry.operand_count = 3;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
 
-        // Step 2: Load the value bit by bit
+        // For simplicity, use a loop to load chunks of the literal.
         for (int shift = 40; shift >= 0; shift -= 12)
         {
-            // Left shift by 12
             memset(&new_entry, 0, sizeof(Line));
             new_entry.type = 'I';
             strcpy(new_entry.opcode, "shftli");
             strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-            snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%d", 12);
+            snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "12");
             new_entry.operand_count = 2;
             new_entry.program_counter = (*address);
             add_to_arraylist(instruction_list, new_entry);
             (*address) += 4;
 
-            // Add the next chunk of L
             memset(&new_entry, 0, sizeof(Line));
             new_entry.type = 'I';
             strcpy(new_entry.opcode, "addi");
@@ -495,12 +509,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
             (*address) += 4;
         }
     }
-}
-
-void error(const char *message)
-{
-    fprintf(stderr, "Error: %s\n", message);
-    exit(1);
+    // If the instruction is not a defined macro, do nothing.
 }
 
 /* -------------------- resolve_labels() -------------------- */
@@ -519,6 +528,8 @@ void resolve_labels(ArrayList *instructions, LabelTable *labels)
         }
     }
 }
+
+/* -------------------- process_file() -------------------- */
 int process_file(const char *input_filename, ArrayList *lines, LabelTable **labels)
 {
     FILE *fp = fopen(input_filename, "r");
@@ -529,14 +540,13 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
     }
 
     char buffer[256];
-    char original_buffer[256]; // Copy for validate_instruction
+    char original_buffer[256]; // Save original line for validation
     int address = 0x1000;      // PC starts at 0x1000
     int in_code_section = 1;   // 1 = .code, 0 = .data
 
     while (fgets(buffer, sizeof(buffer), fp))
     {
-        strcpy(original_buffer, buffer); // 🔥 Save the original line before modifying buffer
-
+        strcpy(original_buffer, buffer); // Save the original line
         remove_comments(buffer);
         trim_whitespace(buffer);
         if (strlen(buffer) == 0)
@@ -552,7 +562,7 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
             in_code_section = 0;
             continue;
         }
-        //  validate_spacing(buffer);
+        validate_spacing(buffer);
 
         Line line_entry;
         memset(&line_entry, 0, sizeof(Line));
@@ -561,6 +571,7 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
         line_entry.type = in_code_section ? 'I' : 'D';
         line_entry.from_call = 0;
 
+        // If the line is a label (starts with ':')
         if (buffer[0] == ':')
         {
             if (!validate_label_format(buffer))
@@ -573,6 +584,26 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
             continue;
         }
 
+        // For data section, if the line consists solely of a number, treat it as a data literal.
+        char *firstToken = strtok(buffer, " \t");
+        if (!in_code_section && (isdigit(firstToken[0]) || firstToken[0] == '-'))
+        {
+            // Treat as a data literal.
+            line_entry.literal = atoi(firstToken);
+            // For data, we don't need an opcode; you may leave it blank.
+            strcpy(line_entry.opcode, "");
+            line_entry.operand_count = 0;
+            add_to_arraylist(lines, line_entry);
+            address += 8;
+            continue;
+        }
+
+        // Otherwise, process as an instruction
+        // Restore the original buffer for tokenization/validation.
+        strcpy(buffer, original_buffer);
+        remove_comments(buffer);
+        trim_whitespace(buffer);
+
         char *token = strtok(buffer, " \t");
         if (!token)
         {
@@ -581,7 +612,7 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
             return 1;
         }
 
-        printf("\nDEBUG: Tokenized Instruction -> %s\n", token); // 🔥 Print the opcode or macro
+        printf("\nDEBUG: Tokenized Instruction -> %s\n", token);
 
         if (validate_macro(token))
         {
@@ -590,7 +621,7 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
             while ((token = strtok(NULL, " \t,")) != NULL && opCount < 4)
             {
                 strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
-                printf("DEBUG: Operand[%d]: %s\n", opCount, token); // 🔥 Print each operand
+                printf("DEBUG: Macro Operand[%d]: %s\n", opCount, token);
                 opCount++;
             }
             line_entry.operand_count = opCount;
@@ -625,14 +656,12 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
                 {
                     strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
                 }
-
-                printf("DEBUG: Operand[%d]: %s\n", opCount, token); // 🔥 Print each operand
+                printf("DEBUG: Operand[%d]: %s\n", opCount, token);
                 opCount++;
             }
             line_entry.operand_count = opCount;
             remove_comments(original_buffer);
-
-            validate_instruction(original_buffer); // ✅ Pass the UNMODIFIED buffer!
+            validate_instruction(original_buffer);
             add_to_arraylist(lines, line_entry);
             address += in_code_section ? 4 : 8;
         }
@@ -641,6 +670,8 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
     fclose(fp);
     return 0;
 }
+
+/* -------------------- write_output_file() -------------------- */
 void write_output_file(const char *output_filename, ArrayList *instructions)
 {
     FILE *fp = fopen(output_filename, "w");
@@ -654,8 +685,6 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
     for (int i = 0; i < instructions->size; i++)
     {
         Line *line = &instructions->lines[i];
-
-        // Ensure we switch sections when needed
         if (line->type != current_section)
         {
             if (line->type == 'I')
@@ -664,10 +693,7 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
                 fprintf(fp, ".data\n");
             current_section = line->type;
         }
-
-        fprintf(fp, "\t"); // Indentation for clarity
-
-        // Handle different instruction formats appropriately
+        fprintf(fp, "\t");
         if ((strcasecmp(line->opcode, "addi") == 0 || strcasecmp(line->opcode, "subi") == 0) && line->operand_count == 2)
         {
             fprintf(fp, "%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
@@ -705,7 +731,6 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
         }
         else
         {
-            // Generic format for any other instruction
             fprintf(fp, "%s", line->opcode);
             for (int j = 0; j < line->operand_count; j++)
             {
@@ -715,8 +740,7 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
                     fprintf(fp, ", %s", line->operands[j]);
             }
         }
-
-        fprintf(fp, "\n"); // Move to the next line after instruction
+        fprintf(fp, "\n");
     }
     fclose(fp);
 }
