@@ -273,9 +273,8 @@ bool validate_instruction(const char *line)
     {
         if (operandCount != 2)
             error("mov requires two operands");
-
         if (operands[0][0] == '(')
-        { // Store to memory
+        { // register-to-memory form
             char reg[10];
             int L;
             if (sscanf(operands[0], "(%[^)])(%d)", reg, &L) != 2)
@@ -286,7 +285,7 @@ bool validate_instruction(const char *line)
                 error("mov: second operand must be a register");
         }
         else if (operands[1][0] == '(')
-        { // Load from memory
+        { // memory-to-register form
             char reg[10];
             int L;
             if (sscanf(operands[1], "(%[^)])(%d)", reg, &L) != 2)
@@ -356,13 +355,16 @@ bool validate_instruction(const char *line)
             if (!isValidRegister(operands[i]))
                 error("Shift instructions: operands must be registers");
         }
-    }if (operandCount != 2)
-    error("Shift immediate instructions require two operands (rd, imm)");
-if (!isValidRegister(operands[0]))
-    error("Shift immediate: first operand must be a register");
-if (!isValidImmediate(operands[1]))
-    error("Shift immediate: second operand must be an immediate");
-
+    }
+    else if (strcasecmp(opcode, "shftri") == 0 || strcasecmp(opcode, "shftli") == 0)
+    {
+        if (operandCount != 2)
+            error("Shift immediate instructions require two operands (rd, imm)");
+        if (!isValidRegister(operands[0]))
+            error("Shift immediate: first operand must be a register");
+        if (!isValidImmediate(operands[1]))
+            error("Shift immediate: second operand must be an immediate");
+    }
     // For unrecognized opcodes, you may choose to issue a warning.
     return true;
 }
