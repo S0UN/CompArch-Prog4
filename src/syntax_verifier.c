@@ -192,19 +192,19 @@ bool validate_instruction(const char *line)
                 error("Arithmetic instructions: all operands must be registers");
         }
     }
-// Immediate Arithmetic Instructions: addi, subi
-else if (strcasecmp(opcode, "addi") == 0 ||
-         strcasecmp(opcode, "subi") == 0)
-{
-    if (operandCount != 2) // ✅ Should expect only 2 operands: rd, L
-        error("Immediate arithmetic instructions require two operands (rd, imm)");
+    // Immediate Arithmetic Instructions: addi, subi
+    else if (strcasecmp(opcode, "addi") == 0 ||
+             strcasecmp(opcode, "subi") == 0)
+    {
+        if (operandCount != 2) // ✅ Should expect only 2 operands: rd, L
+            error("Immediate arithmetic instructions require two operands (rd, imm)");
 
-    if (!isValidRegister(operands[0])) // ✅ Only one register (rd)
-        error("addi/subi: first operand must be a register");
+        if (!isValidRegister(operands[0])) // ✅ Only one register (rd)
+            error("addi/subi: first operand must be a register");
 
-    if (!isValidImmediate(operands[1])) // ✅ Second operand must be an immediate (L)
-        error("addi/subi: second operand must be an immediate");
-}
+        if (!isValidImmediate(operands[1])) // ✅ Second operand must be an immediate (L)
+            error("addi/subi: second operand must be an immediate");
+    }
 
     // Logical Operations: xor, and, or
     else if (strcasecmp(opcode, "xor") == 0 ||
@@ -227,31 +227,34 @@ else if (strcasecmp(opcode, "addi") == 0 ||
             error("not: operands must be registers");
     }
     // Branching and Control Flow: brr, br, call, return
+    // Branching and Control Flow: brr, br, call, return
     else if (strcasecmp(opcode, "brr") == 0)
     {
-        if (operandCount != 3)
-            error("brr requires three operands (rs, rt, offset)");
-        if (!isValidRegister(operands[0]) || !isValidRegister(operands[1]))
-            error("brr: first two operands must be registers");
-        if (!isValidImmediate(operands[2]) && !isLabelSyntax(operands[2]))
-            error("brr: third operand must be an immediate or a label");
+        if (operandCount != 1)
+            error("brr requires one operand (register or immediate)");
+
+        if (!isValidRegister(operands[0]) && !isValidImmediate(operands[0]))
+            error("brr: operand must be either a register (rd) or an immediate (L)");
     }
+
     else if (strcasecmp(opcode, "br") == 0)
     {
         if (operandCount != 1)
-            error("br requires one operand (register)");
+            error("br requires one operand (register or immediate)");
 
-        if (!isValidRegister(operands[0])) // 🔥 Fix: Check for a valid register
-            error("br: operand must be a register (r_d)");
+        if (!isValidRegister(operands[0]) && !isValidImmediate(operands[0]))
+            error("br: operand must be eeither a register (rd) or an immediate (L)");
     }
 
     else if (strcasecmp(opcode, "call") == 0)
     {
         if (operandCount != 1)
             error("call requires one operand (offset)");
+
         if (!isValidImmediate(operands[0]) && !isLabelSyntax(operands[0]))
             error("call: operand must be an immediate or a label");
     }
+
     else if (strcasecmp(opcode, "return") == 0)
     {
         if (operandCount != 0)
