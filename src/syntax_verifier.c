@@ -297,6 +297,8 @@ int validate_spacing(char *line)
         if (!isValidRegister(operands[0]))
             error("Shift immediate: first operand must be a register");
 
+        if (!isValidImmediate(operands[1], false, 12)) // 🔥 Unsigned 5-bit immediate (for shift amount)
+            error("Shift immediate: second operand must be a 5-bit unsigned immediate");
     }
     else if (strcasecmp(opcode, "mov") == 0)
     {
