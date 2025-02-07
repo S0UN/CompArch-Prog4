@@ -19,7 +19,7 @@ bool validate_instruction(const char *line);
 void trim_whitespace(char *line);
 void remove_comments(char *line) ;
 bool isValidRegister(const char* reg) ;
-bool isValidImmediate(const char* imm);
+bool isValidImmediate(const char *imm, bool allow_negative, int bit_size);
 bool isMemoryOperand(const char* operand);
 void error(const char *message);
 
