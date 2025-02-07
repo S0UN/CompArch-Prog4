@@ -553,15 +553,19 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
     }
     else if (strcasecmp(line_entry->opcode, "halt") == 0)
     {
-        // halt -> trap 0
-        strcpy(new_entry.opcode, "trap");
-        strcpy(new_entry.operands[0], "0");
-        new_entry.operand_count = 1;
+        // halt -> priv r0, r0, r0, 0x0
+        strcpy(new_entry.opcode, "priv");
+        strcpy(new_entry.operands[0], "r0");
+        strcpy(new_entry.operands[1], "r0");
+        strcpy(new_entry.operands[2], "r0");
+        strcpy(new_entry.operands[3], "0x0"); // Immediate 0x0
+        new_entry.operand_count = 4;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
         return;
     }
+
     else if (strcasecmp(line_entry->opcode, "push") == 0)
     {
         // push rd -> mov (r31)(-8), rd; subi r31, r31, 8

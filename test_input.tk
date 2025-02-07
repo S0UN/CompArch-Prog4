@@ -1,2 +1,2 @@
 .code
-    in r2, r3
+    halt
