@@ -131,72 +131,94 @@ int validate_macro(char *token)
     }
     return 0;
 }
-int validate_spacing(char *line)
+int validate_spacing(const char *line)
 {
-    // Save a copy of the original line for error messages.
-    char original[256];
-    strncpy(original, line, sizeof(original));
-    original[sizeof(original) - 1] = '\0';
+    // Make a duplicate of the input line so we don't modify the caller's copy.
+    char lineCopy[256];
+    strncpy(lineCopy, line, sizeof(lineCopy));
+    lineCopy[sizeof(lineCopy) - 1] = '\0';
 
-    // If the line is a label (starts with ':') or a directive (.code or .data), skip spacing checks.
-    if (line[0] == ':' || line[0] == '.')
+    // If the line is a label or directive, skip spacing checks.
+    if (lineCopy[0] == ':' || lineCopy[0] == '.')
         return 1;
 
-    // Check indentation before trimming:
-    // The line must start with a tab OR exactly four spaces.
-    if (!(line[0] == '\t' || (line[0] == ' ' && line[1] == ' ' && line[2] == ' ' && line[3] == ' ')))
-    {
-        fprintf(stderr, "Syntax Error: Instruction must be indented with a tab or exactly 4 spaces: %s\n", original);
-        return 0;
-    }
+    // Trim leading whitespace to check indentation.
 
-    // Now trim the line (this removes the indentation for further internal spacing checks).
-    trim_whitespace(line);
+    // Check that the original line starts with a tab or exactly four spaces.
+   if (!(lineCopy[0] == '\t' || (lineCopy[0] == ' ' && lineCopy[1] == ' ' && lineCopy[2] == ' ' && lineCopy[3] == ' '))) {
+    // Debug print statements
+    printf("DEBUG: First four characters of lineCopy:\n");
+    printf("  lineCopy[0]: '%c' (ASCII %d)\n", lineCopy[0], lineCopy[0]);
+    printf("  lineCopy[1]: '%c' (ASCII %d)\n", lineCopy[1], lineCopy[1]);
+    printf("  lineCopy[2]: '%c' (ASCII %d)\n", lineCopy[2], lineCopy[2]);
+    printf("  lineCopy[3]: '%c' (ASCII %d)\n", lineCopy[3], lineCopy[3]);
 
-    // Duplicate the trimmed line for tokenization.
-    char *copy = strdup(line);
-    if (!copy)
+    fprintf(stderr, "Syntax Error: Instruction must be indented with a tab or exactly 4 spaces: %s\n", line);
+    return 0;
+}
+    trim_whitespace(lineCopy);
+
+
+    // Now, make another copy to trim internal spacing for tokenization.
+    char *trimmedCopy = strdup(lineCopy);
+    if (!trimmedCopy)
     {
         perror("Memory allocation failed in validate_spacing");
         exit(1);
     }
+    trim_whitespace(trimmedCopy);
 
     char *tokens[5];
     int token_count = 0;
-    char *token = strtok(copy, " ");
+    char *token = strtok(trimmedCopy, " ");
     while (token && token_count < 5)
     {
         tokens[token_count++] = token;
         token = strtok(NULL, " ");
     }
 
-    // If the opcode is "halt" or "return", then we skip the check for a space following the opcode.
+    // Ensure we have at least one token (the opcode)
+    if (token_count < 1)
+    {
+        free(trimmedCopy);
+        return 1; // No opcode, treat as valid (should be caught elsewhere if needed)
+    }
+
+    // For "halt" or "return", skip the check for a following space.
     if (!(strcasecmp(tokens[0], "halt") == 0 || strcasecmp(tokens[0], "return") == 0))
     {
         int opcode_len = strlen(tokens[0]);
-        if (line[opcode_len] != ' ')
+
+        // We check the original (untrimmed) copy to see if there is exactly one space.
+        if (lineCopy[opcode_len] != ' ')
         {
-            free(copy);
-            fprintf(stderr, "Syntax Error: Opcode must be followed by exactly one space: %s\n", line);
+            free(trimmedCopy);
+            fprintf(stderr, "Syntax Error: Opcode must be followed by exactly one space: %s\n", lineCopy);
             return 0;
         }
     }
 
-    // Check that each operand (except the last token) ends with a comma.
-    for (int i = 1; i < token_count - 1; i++)
+    // **Fix: Allow labels without trailing commas**
+    for (int i = 1; i < token_count; i++)
     {
         int len = strlen(tokens[i]);
-        if (tokens[i][len - 1] != ',')
+
+        // If it's a label (starts with ':'), don't enforce a trailing comma.
+        if (tokens[i][0] == ':')
+            continue;
+
+        // Only enforce commas if there is another operand after this one
+        if (i < token_count - 1 && tokens[i][len - 1] != ',')
         {
-            free(copy);
-            fprintf(stderr, "Syntax Error: Incorrect spacing around operands: %s\n", line);
+            free(trimmedCopy);
+            fprintf(stderr, "Syntax Error: Incorrect spacing around operands: %s\n", lineCopy);
             return 0;
         }
     }
-
-    free(copy);
+    free(trimmedCopy);
     return 1;
 }
+
 bool validate_macro_instruction(const char *line)
 {
     char buf[300];
@@ -717,7 +739,7 @@ void resolve_labels(ArrayList *instructions, LabelTable *labels)
         if (line->label[0] == ':')
         {
             char lbl[20];
-            strcpy(lbl, line->label + 1);  // Remove the colon.
+            strcpy(lbl, line->label + 1); // Remove the colon.
             trim_whitespace(lbl);
             int addr = get_label_address(labels, lbl);
             if (addr != -1)
@@ -739,7 +761,6 @@ void resolve_labels(ArrayList *instructions, LabelTable *labels)
     }
 }
 
-
 /* -------------------- process_file() -------------------- */
 int process_file(const char *input_filename, ArrayList *lines, LabelTable **labels)
 {
@@ -757,6 +778,8 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
 
     while (fgets(buffer, sizeof(buffer), fp))
     {
+        validate_spacing(buffer);
+
         strcpy(original_buffer, buffer); // Save the original line
         remove_comments(buffer);
         trim_whitespace(buffer);
@@ -774,29 +797,27 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
             in_code_section = 0;
             continue;
         }
-        validate_spacing(buffer);
 
         // If the line is a label (starts with ':')
         if (buffer[0] == ':')
-{
-    if (!validate_label_format(buffer))
-    {
-        fprintf(stderr, "Syntax Error: Invalid label format: %s\n", buffer);
-        fclose(fp);
-        return 1;
-    }
-    // Trim the label first.
-    char tempLabel[50];
-    strncpy(tempLabel, buffer, sizeof(tempLabel) - 1);
-    tempLabel[sizeof(tempLabel) - 1] = '\0';
-    trim_whitespace(tempLabel);
+        {
+            if (!validate_label_format(buffer))
+            {
+                fprintf(stderr, "Syntax Error: Invalid label format: %s\n", buffer);
+                fclose(fp);
+                return 1;
+            }
+            // Trim the label first.
+            char tempLabel[50];
+            strncpy(tempLabel, buffer, sizeof(tempLabel) - 1);
+            tempLabel[sizeof(tempLabel) - 1] = '\0';
+            trim_whitespace(tempLabel);
 
-    // Store the label in the label table, but DO NOT add a label line to the ArrayList.
-    store_label(labels, tempLabel + 1, address, in_code_section);
-    // Do not add this label line to the final output.
-    continue;
-}
-
+            // Store the label in the label table, but DO NOT add a label line to the ArrayList.
+            store_label(labels, tempLabel + 1, address, in_code_section);
+            // Do not add this label line to the final output.
+            continue;
+        }
 
         // For data section, if the line consists solely of a number, treat it as a data literal.
         char *firstToken = strtok(buffer, " \t");
@@ -805,7 +826,7 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
             Line data_line;
             memset(&data_line, 0, sizeof(Line));
             data_line.program_counter = address;
-            data_line.size = 8;  // Data items take 8 bytes.
+            data_line.size = 8; // Data items take 8 bytes.
             data_line.type = 'D';
             // Save the literal as an integer value.
             data_line.literal = (int)atoll(firstToken);
@@ -849,7 +870,7 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
             char *validateCopy = strdup(original_buffer);
             if (!validateCopy)
                 error("Memory allocation failed during macro validation");
-            validate_macro_instruction(validateCopy);  // Should succeed.
+            validate_macro_instruction(validateCopy); // Should succeed.
             free(validateCopy);
             expand_macro(&line_entry, lines, &address);
         }
@@ -928,8 +949,6 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
     fclose(fp);
     return 0;
 }
-
-
 /* -------------------- write_output_file() -------------------- */
 void write_output_file(const char *output_filename, ArrayList *instructions)
 {
@@ -999,7 +1018,9 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
                     fprintf(fp, ", %s", line->operands[j]);
             }
         }
-        fprintf(fp, "\n");
+        /* Only add newline if this is not the last instruction */
+        if (i != instructions->size - 1)
+            fprintf(fp, "\n");
     }
     fclose(fp);
 }

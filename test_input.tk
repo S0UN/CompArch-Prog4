@@ -1,10 +1,2 @@
-.code
-    add r1, r2, r3
-    br :start
-:start
-    sub r4, r5, r6
-    call :func
-    return
 .data
-:func
-    42
+    9
