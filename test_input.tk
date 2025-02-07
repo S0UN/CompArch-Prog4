@@ -1,3 +1,2 @@
 .code
-    pop 
-    push r2
+    halt r1

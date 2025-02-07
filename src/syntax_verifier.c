@@ -807,38 +807,57 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
             return 1;
         }
 
-        printf("\nDEBUG: Tokenized Instruction -> %s\n", token);
-        if (validate_macro(token))
-        {
-            // First, validate using a duplicate of the original line.
-            char *validateCopy = strdup(original_buffer);
-            if (!validateCopy)
-                error("Memory allocation failed during macro validation");
-            validate_macro_instruction(validateCopy);
-            free(validateCopy);
+       // Save the original unmodified line in original_buffer
+// (Assume original_buffer was already filled with the original line.)
+printf("\nDEBUG: Tokenized Instruction -> %s\n", token);
 
-            // Now, duplicate the original line for tokenization for expansion.
-            char *macroLine = strdup(original_buffer);
-            if (!macroLine)
-                error("Memory allocation failed during macro expansion tokenization");
+if (strcasecmp(token, "halt") == 0) {
+    // Special-case: halt has no operands.
+    strcpy(line_entry.opcode, token);
+    line_entry.operand_count = 0;
+    // (Optionally, you can call validate_macro_instruction() on a duplicate if you wish.)
+    char *validateCopy = strdup(original_buffer);
+    if (!validateCopy)
+        error("Memory allocation failed during macro validation");
+    validate_macro_instruction(validateCopy);  // This should succeed since halt takes no operands.
+    free(validateCopy);
+    expand_macro(&line_entry, lines, &address);
+}
+else if (validate_macro(token))
+{
+    // First, validate using a duplicate of the original line.
+    char *validateCopy = strdup(original_buffer);
+    if (!validateCopy)
+        error("Memory allocation failed during macro validation");
+    validate_macro_instruction(validateCopy);
+    free(validateCopy);
 
-            // Tokenize the macro line.
-            char *macroToken = strtok(macroLine, " \t");
-            strcpy(line_entry.opcode, macroToken);
-            int opCount = 0;
-            while ((macroToken = strtok(NULL, " \t,")) != NULL && opCount < 4)
-            {
-                // Trim each token before storing.
-                trim_whitespace(macroToken);
-                strncpy(line_entry.operands[opCount], macroToken, sizeof(line_entry.operands[opCount]) - 1);
-                printf("DEBUG: Macro Operand[%d]: '%s'\n", opCount, line_entry.operands[opCount]);
-                opCount++;
-            }
-            line_entry.operand_count = opCount;
-            free(macroLine);
+    // Now, duplicate the original line for tokenization for expansion.
+    char *macroLine = strdup(original_buffer);
+    if (!macroLine)
+        error("Memory allocation failed during macro expansion tokenization");
 
-            expand_macro(&line_entry, lines, &address);
+    // Tokenize the macro line.
+    char *macroToken = strtok(macroLine, " \t");
+    strcpy(line_entry.opcode, macroToken);
+    int opCount = 0;
+    while ((macroToken = strtok(NULL, " \t,")) != NULL && opCount < 4)
+    {
+        // Trim each token before storing.
+        trim_whitespace(macroToken);
+        // Only store nonempty tokens.
+        if (strlen(macroToken) > 0) {
+            strncpy(line_entry.operands[opCount], macroToken, sizeof(line_entry.operands[opCount]) - 1);
+            printf("DEBUG: Macro Operand[%d]: '%s'\n", opCount, line_entry.operands[opCount]);
+            opCount++;
         }
+    }
+    line_entry.operand_count = opCount;
+    free(macroLine);
+
+    expand_macro(&line_entry, lines, &address);
+}
+
 
         else
         {
