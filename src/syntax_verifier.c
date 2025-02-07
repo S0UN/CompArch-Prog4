@@ -713,6 +713,7 @@ void resolve_labels(ArrayList *instructions, LabelTable *labels)
     for (int i = 0; i < instructions->size; i++)
     {
         Line *line = &instructions->lines[i];
+        // Resolve the label field if it begins with ':'
         if (line->label[0] == ':')
         {
             char lbl[20];
@@ -721,8 +722,21 @@ void resolve_labels(ArrayList *instructions, LabelTable *labels)
             if (addr != -1)
                 snprintf(line->label, sizeof(line->label), "0x%X", addr);
         }
+        // Also, for each operand that starts with ':'
+        for (int j = 0; j < line->operand_count; j++)
+        {
+            if (line->operands[j][0] == ':')
+            {
+                char lbl[20];
+                strcpy(lbl, line->operands[j] + 1);
+                int addr = get_label_address(labels, lbl);
+                if (addr != -1)
+                    snprintf(line->operands[j], sizeof(line->operands[j]), "0x%X", addr);
+            }
+        }
     }
 }
+
 
 /* -------------------- process_file() -------------------- */
 int process_file(const char *input_filename, ArrayList *lines, LabelTable **labels)
@@ -747,6 +761,7 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
         if (strlen(buffer) == 0)
             continue;
 
+        // Handle section directives.
         if (strncmp(buffer, ".code", 5) == 0)
         {
             in_code_section = 1;
@@ -759,13 +774,6 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
         }
         validate_spacing(buffer);
 
-        Line line_entry;
-        memset(&line_entry, 0, sizeof(Line));
-        line_entry.program_counter = address;
-        line_entry.size = in_code_section ? 4 : 8;
-        line_entry.type = in_code_section ? 'I' : 'D';
-        line_entry.from_call = 0;
-
         // If the line is a label (starts with ':')
         if (buffer[0] == ':')
         {
@@ -775,7 +783,22 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
                 fclose(fp);
                 return 1;
             }
+            // Store the label in the label table.
             store_label(labels, buffer + 1, address, in_code_section);
+
+            // Also add a label line to the ArrayList.
+            Line label_line;
+            memset(&label_line, 0, sizeof(Line));
+            label_line.program_counter = address;
+            // For our purposes, we'll set the size to 0 so that labels do not consume machine code space.
+            label_line.size = 0;
+            // Mark type as 'L' for label.
+            label_line.type = 'L';
+            // Store the label text (as read, e.g., ":function")
+            strcpy(label_line.opcode, buffer);
+            label_line.operand_count = 0;
+            add_to_arraylist(lines, label_line);
+            // Do not increment address for a label definition.
             continue;
         }
 
@@ -783,17 +806,22 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
         char *firstToken = strtok(buffer, " \t");
         if (!in_code_section && (isdigit(firstToken[0]) || firstToken[0] == '-'))
         {
-            // Treat as a data literal.
-            line_entry.literal = atoi(firstToken);
-            // For data, we don't need an opcode; you may leave it blank.
-            strcpy(line_entry.opcode, "");
-            line_entry.operand_count = 0;
-            add_to_arraylist(lines, line_entry);
+            Line data_line;
+            memset(&data_line, 0, sizeof(Line));
+            data_line.program_counter = address;
+            data_line.size = 8;  // Data items take 8 bytes.
+            data_line.type = 'D';
+            // Save the literal as an integer value.
+            data_line.literal = (int)atoll(firstToken);
+            // Store the literal as text in the opcode field (so we can print it).
+            snprintf(data_line.opcode, sizeof(data_line.opcode), "%d", data_line.literal);
+            data_line.operand_count = 0;
+            add_to_arraylist(lines, data_line);
             address += 8;
             continue;
         }
 
-        // Otherwise, process as an instruction
+        // Otherwise, process as an instruction.
         // Restore the original buffer for tokenization/validation.
         strcpy(buffer, original_buffer);
         remove_comments(buffer);
@@ -807,58 +835,60 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
             return 1;
         }
 
-       // Save the original unmodified line in original_buffer
-// (Assume original_buffer was already filled with the original line.)
-printf("\nDEBUG: Tokenized Instruction -> %s\n", token);
+        printf("\nDEBUG: Tokenized Instruction -> %s\n", token);
 
-if (strcasecmp(token, "halt") == 0) {
-    // Special-case: halt has no operands.
-    strcpy(line_entry.opcode, token);
-    line_entry.operand_count = 0;
-    // (Optionally, you can call validate_macro_instruction() on a duplicate if you wish.)
-    char *validateCopy = strdup(original_buffer);
-    if (!validateCopy)
-        error("Memory allocation failed during macro validation");
-    validate_macro_instruction(validateCopy);  // This should succeed since halt takes no operands.
-    free(validateCopy);
-    expand_macro(&line_entry, lines, &address);
-}
-else if (validate_macro(token))
-{
-    // First, validate using a duplicate of the original line.
-    char *validateCopy = strdup(original_buffer);
-    if (!validateCopy)
-        error("Memory allocation failed during macro validation");
-    validate_macro_instruction(validateCopy);
-    free(validateCopy);
+        Line line_entry;
+        memset(&line_entry, 0, sizeof(Line));
+        line_entry.program_counter = address;
+        line_entry.size = in_code_section ? 4 : 8;
+        line_entry.type = in_code_section ? 'I' : 'D';
+        line_entry.from_call = 0;
 
-    // Now, duplicate the original line for tokenization for expansion.
-    char *macroLine = strdup(original_buffer);
-    if (!macroLine)
-        error("Memory allocation failed during macro expansion tokenization");
-
-    // Tokenize the macro line.
-    char *macroToken = strtok(macroLine, " \t");
-    strcpy(line_entry.opcode, macroToken);
-    int opCount = 0;
-    while ((macroToken = strtok(NULL, " \t,")) != NULL && opCount < 4)
-    {
-        // Trim each token before storing.
-        trim_whitespace(macroToken);
-        // Only store nonempty tokens.
-        if (strlen(macroToken) > 0) {
-            strncpy(line_entry.operands[opCount], macroToken, sizeof(line_entry.operands[opCount]) - 1);
-            printf("DEBUG: Macro Operand[%d]: '%s'\n", opCount, line_entry.operands[opCount]);
-            opCount++;
+        // Check if the instruction is a macro.
+        if (strcasecmp(token, "halt") == 0)
+        {
+            // Special-case: halt takes no operands.
+            strcpy(line_entry.opcode, token);
+            line_entry.operand_count = 0;
+            char *validateCopy = strdup(original_buffer);
+            if (!validateCopy)
+                error("Memory allocation failed during macro validation");
+            validate_macro_instruction(validateCopy);  // Should succeed.
+            free(validateCopy);
+            expand_macro(&line_entry, lines, &address);
         }
-    }
-    line_entry.operand_count = opCount;
-    free(macroLine);
+        else if (validate_macro(token))
+        {
+            // Validate macro using a duplicate.
+            char *validateCopy = strdup(original_buffer);
+            if (!validateCopy)
+                error("Memory allocation failed during macro validation");
+            validate_macro_instruction(validateCopy);
+            free(validateCopy);
 
-    expand_macro(&line_entry, lines, &address);
-}
+            // Duplicate the original line for tokenization.
+            char *macroLine = strdup(original_buffer);
+            if (!macroLine)
+                error("Memory allocation failed during macro expansion tokenization");
 
+            char *macroToken = strtok(macroLine, " \t");
+            strcpy(line_entry.opcode, macroToken);
+            int opCount = 0;
+            while ((macroToken = strtok(NULL, " \t,")) != NULL && opCount < 4)
+            {
+                trim_whitespace(macroToken);
+                if (strlen(macroToken) > 0)
+                {
+                    strncpy(line_entry.operands[opCount], macroToken, sizeof(line_entry.operands[opCount]) - 1);
+                    printf("DEBUG: Macro Operand[%d]: '%s'\n", opCount, line_entry.operands[opCount]);
+                    opCount++;
+                }
+            }
+            line_entry.operand_count = opCount;
+            free(macroLine);
 
+            expand_macro(&line_entry, lines, &address);
+        }
         else
         {
             strcpy(line_entry.opcode, token);
@@ -903,7 +933,7 @@ else if (validate_macro(token))
     return 0;
 }
 
-/* -------------------- write_output_file() -------------------- */
+
 void write_output_file(const char *output_filename, ArrayList *instructions)
 {
     FILE *fp = fopen(output_filename, "w");
@@ -923,10 +953,23 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
                 fprintf(fp, ".code\n");
             else if (line->type == 'D')
                 fprintf(fp, ".data\n");
+            else if (line->type == 'L')
+                fprintf(fp, ".data\n");  // If labels in data are expected.
             current_section = line->type;
         }
         fprintf(fp, "\t");
-        if ((strcasecmp(line->opcode, "addi") == 0 || strcasecmp(line->opcode, "subi") == 0) && line->operand_count == 2)
+
+        if (line->type == 'D' && line->opcode[0] == '\0')
+        {
+            // Data literal
+            fprintf(fp, "%d", line->literal);
+        }
+        else if (line->type == 'L')
+        {
+            // Label definition: print the label (which now includes its resolved address).
+            fprintf(fp, "%s", line->opcode);
+        }
+        else if ((strcasecmp(line->opcode, "addi") == 0 || strcasecmp(line->opcode, "subi") == 0) && line->operand_count == 2)
         {
             fprintf(fp, "%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
         }
