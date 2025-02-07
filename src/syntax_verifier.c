@@ -297,8 +297,6 @@ int validate_spacing(char *line)
         if (!isValidRegister(operands[0]))
             error("Shift immediate: first operand must be a register");
 
-        if (!isValidImmediate(operands[1], false, 5)) // 🔥 Unsigned 5-bit immediate (for shift amount)
-            error("Shift immediate: second operand must be a 5-bit unsigned immediate");
     }
     else if (strcasecmp(opcode, "mov") == 0)
     {
@@ -326,8 +324,7 @@ int validate_spacing(char *line)
 }
 
 
-/* -------------------- expand_macro() -------------------- */
-void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
+/* -------------------- expand_macro() -------------------- */void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
 {
     Line new_entry;
     memset(&new_entry, 0, sizeof(Line));
@@ -335,6 +332,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
 
     if (strcasecmp(line_entry->opcode, "clr") == 0)
     {
+        // clr rd -> xor rd, rd, rd
         strcpy(new_entry.opcode, "xor");
         strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0]) - 1);
         strncpy(new_entry.registers[1], line_entry->operands[0], sizeof(new_entry.registers[1]) - 1);
@@ -345,10 +343,14 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         (*address) += 4;
         return;
     }
-    else if (strcasecmp(line_entry->opcode, "halt") == 0) // 🔥 NEW MACRO FOR halt
+    else if (strcasecmp(line_entry->opcode, "halt") == 0)
     {
-        strcpy(new_entry.opcode, "trap");
-        new_entry.literal = 0; // halt is equivalent to trap 0x0
+        // halt -> priv r0, r0, r0, 0x0
+        strcpy(new_entry.opcode, "priv");
+        strcpy(new_entry.registers[0], "r0");
+        strcpy(new_entry.registers[1], "r0");
+        strcpy(new_entry.registers[2], "r0");
+        new_entry.literal = 0x0;
         new_entry.operand_count = 1;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
@@ -357,10 +359,10 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
     }
     else if (strcasecmp(line_entry->opcode, "push") == 0)
     {
-        strcpy(new_entry.opcode, "subi");
-        strcpy(new_entry.registers[0], "r30");
-        strcpy(new_entry.registers[1], "r30");
-        new_entry.literal = 8;
+        // push rd -> mov (r31)(-8), rd → subi r31, 8
+        strcpy(new_entry.opcode, "mov");
+        strcpy(new_entry.registers[0], "(r31)(-8)");
+        strncpy(new_entry.registers[1], line_entry->operands[0], sizeof(new_entry.registers[1]) - 1);
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
@@ -368,10 +370,10 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
 
         memset(&new_entry, 0, sizeof(Line));
         new_entry.type = 'I';
-        strcpy(new_entry.opcode, "st");
-        strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0]) - 1);
-        strcpy(new_entry.registers[1], "r30");
-        new_entry.literal = 0;
+        strcpy(new_entry.opcode, "subi");
+        strcpy(new_entry.registers[0], "r31");
+        strcpy(new_entry.registers[1], "r31");
+        new_entry.literal = 8;
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
@@ -380,10 +382,10 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
     }
     else if (strcasecmp(line_entry->opcode, "pop") == 0)
     {
-        strcpy(new_entry.opcode, "ld");
+        // pop rd -> mov rd, (r31)(0) → addi r31, 8
+        strcpy(new_entry.opcode, "mov");
         strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0]) - 1);
-        strcpy(new_entry.registers[1], "r30");
-        new_entry.literal = 0;
+        strcpy(new_entry.registers[1], "(r31)(0)");
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
@@ -392,8 +394,8 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         memset(&new_entry, 0, sizeof(Line));
         new_entry.type = 'I';
         strcpy(new_entry.opcode, "addi");
-        strcpy(new_entry.registers[0], "r30");
-        strcpy(new_entry.registers[1], "r30");
+        strcpy(new_entry.registers[0], "r31");
+        strcpy(new_entry.registers[1], "r31");
         new_entry.literal = 8;
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
@@ -403,22 +405,13 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
     }
     else if (strcasecmp(line_entry->opcode, "out") == 0)
     {
-        strcpy(new_entry.opcode, "st");
+        // out rs, rt -> priv rs, rt, r0, 0x4
+        strcpy(new_entry.opcode, "priv");
         strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0]) - 1);
-        strcpy(new_entry.registers[1], "0xFFFFF000");
-        new_entry.literal = 0;
-        new_entry.operand_count = 2;
-        new_entry.program_counter = (*address);
-        add_to_arraylist(instruction_list, new_entry);
-        (*address) += 4;
-
-        memset(&new_entry, 0, sizeof(Line));
-        new_entry.type = 'I';
-        strcpy(new_entry.opcode, "st");
-        strncpy(new_entry.registers[0], line_entry->operands[1], sizeof(new_entry.registers[0]) - 1);
-        strcpy(new_entry.registers[1], "0xFFFFF000");
-        new_entry.literal = 8;
-        new_entry.operand_count = 2;
+        strncpy(new_entry.registers[1], line_entry->operands[1], sizeof(new_entry.registers[1]) - 1);
+        strcpy(new_entry.registers[2], "r0");
+        new_entry.literal = 0x4;
+        new_entry.operand_count = 4;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
@@ -426,15 +419,56 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
     }
     else if (strcasecmp(line_entry->opcode, "in") == 0)
     {
-        strcpy(new_entry.opcode, "ld");
+        // in rs, rt -> priv rs, rt, r0, 0x3
+        strcpy(new_entry.opcode, "priv");
         strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0]) - 1);
-        strcpy(new_entry.registers[1], "0xFFFFF008");
-        new_entry.literal = 0;
-        new_entry.operand_count = 2;
+        strncpy(new_entry.registers[1], line_entry->operands[1], sizeof(new_entry.registers[1]) - 1);
+        strcpy(new_entry.registers[2], "r0");
+        new_entry.literal = 0x3;
+        new_entry.operand_count = 4;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
         return;
+    }
+    else if (strcasecmp(line_entry->opcode, "ld") == 0)
+    {
+        // ld rd, L -> Sequence of xor, addi, shftli to load L into rd
+        long long value = atoll(line_entry->operands[1]);
+
+        // Clear rd first
+        strcpy(new_entry.opcode, "xor");
+        strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0]) - 1);
+        strncpy(new_entry.registers[1], new_entry.registers[0], sizeof(new_entry.registers[1]) - 1);
+        strncpy(new_entry.registers[2], new_entry.registers[0], sizeof(new_entry.registers[2]) - 1);
+        new_entry.operand_count = 3;
+        new_entry.program_counter = (*address);
+        add_to_arraylist(instruction_list, new_entry);
+        (*address) += 4;
+
+        // Load immediate value in steps
+        for (int shift = 40; shift >= 4; shift -= 12)
+        {
+            memset(&new_entry, 0, sizeof(Line));
+            new_entry.type = 'I';
+            strcpy(new_entry.opcode, "shftli");
+            strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0]) - 1);
+            new_entry.literal = 12;
+            new_entry.operand_count = 2;
+            new_entry.program_counter = (*address);
+            add_to_arraylist(instruction_list, new_entry);
+            (*address) += 4;
+
+            memset(&new_entry, 0, sizeof(Line));
+            new_entry.type = 'I';
+            strcpy(new_entry.opcode, "addi");
+            strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0]) - 1);
+            new_entry.literal = (value >> shift) & 0xFFF;
+            new_entry.operand_count = 2;
+            new_entry.program_counter = (*address);
+            add_to_arraylist(instruction_list, new_entry);
+            (*address) += 4;
+        }
     }
 }
 
