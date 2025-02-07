@@ -38,35 +38,57 @@ bool isValidRegister(const char *reg)
     long num = strtol(reg + 1, &endptr, 10);
     return (*endptr == '\0' && num >= 0 && num <= 31);
 }
-
-bool isValidImmediate(const char *imm)
+bool isValidImmediate(const char *imm, bool allow_negative, int bit_size)
 {
     while (isspace((unsigned char)*imm))
         imm++;
     if (*imm == '\0')
         return false;
+
     bool neg = false;
     if (*imm == '-')
     {
+        if (!allow_negative) // If negatives aren't allowed (e.g., in unsigned immediate fields)
+            return false;
         neg = true;
         imm++;
     }
-    if (imm[0] == '0' && (imm[1] == 'x' || imm[1] == 'X'))
-    {
-        char *endptr;
-        long val = strtol(imm + 2, &endptr, 16);
-        if (*endptr != '\0')
-            return false;
-        if (neg)
-            val = -val;
-        return (val >= -2048 && val <= 2047);
+
+    long min_val, max_val;
+
+    if (bit_size == 12) {  // 12-bit immediate range
+        if (allow_negative) {
+            min_val = -2048; // 2's complement signed 12-bit
+            max_val = 2047;
+        } else {
+            min_val = 0;
+            max_val = 4095; // Unsigned 12-bit
+        }
+    } else {
+        return false; // Unsupported immediate size
     }
+
+    long val;
     char *endptr;
-    long val = strtol(imm, &endptr, 10);
-    if (*endptr != '\0')
+
+    if (imm[0] == '0' && (imm[1] == 'x' || imm[1] == 'X'))
+    {   
+        val = strtol(imm + 2, &endptr, 16); // Parse as hex
+    }
+    else
+    {
+        val = strtol(imm, &endptr, 10); // Parse as decimal
+    }
+
+    if (*endptr != '\0') // If invalid characters remain, return false
         return false;
-    return (val >= -2048 && val <= 2047);
+
+    if (neg)
+        val = -val;
+
+    return (val >= min_val && val <= max_val);
 }
+
 
 bool isMemoryOperand(const char *operand)
 {
@@ -142,13 +164,13 @@ int validate_spacing(char *line)
     return 1;
 }
 
-/* -------------------- validate_instruction() -------------------- */
-bool validate_instruction(const char *line)
+/* -------------------- validate_instruction() -------------------- */bool validate_instruction(const char *line)
 {
     char opcode[20];
     char *operands[4];
     int operandCount = 0;
     printf("[%s]\n", line);
+
     // Copy line so original is not modified
     char temp[300];
     strcpy(temp, line);
@@ -162,23 +184,21 @@ bool validate_instruction(const char *line)
     }
     strcpy(opcode, token);
 
-    printf("\nDEBUG: Tokenized Opcode -> %s\n", opcode); // 🔥 Print extracted opcode
+    printf("\nDEBUG: Tokenized Opcode -> %s\n", opcode);
 
     // Extract operands (same way as process_file)
     while ((token = strtok(NULL, " \t,")) != NULL && operandCount < 4)
     {
-        operands[operandCount] = token;                                           // Store operand
-        printf("DEBUG: Operand[%d]: %s\n", operandCount, operands[operandCount]); // 🔥 Debug output
+        operands[operandCount] = token;
+        printf("DEBUG: Operand[%d]: %s\n", operandCount, operands[operandCount]);
         operandCount++;
     }
 
-    // 🔥 Debugging: Print total operand count
     printf("DEBUG: Total Operands Found: %d\n", operandCount);
 
     // === Now, validate based on instruction type ===
 
-    // 🔥 Debugging: Print total operand count
-    // Arithmetic Instructions: add, sub, mul, div
+    // Arithmetic Instructions: add, sub, mul, div (Require 3 register operands)
     if (strcasecmp(opcode, "add") == 0 ||
         strcasecmp(opcode, "sub") == 0 ||
         strcasecmp(opcode, "mul") == 0 ||
@@ -186,26 +206,25 @@ bool validate_instruction(const char *line)
     {
         if (operandCount != 3)
             error("Arithmetic instructions require three operands (rd, rs, rt)");
+
         for (int i = 0; i < 3; i++)
         {
             if (!isValidRegister(operands[i]))
                 error("Arithmetic instructions: all operands must be registers");
         }
     }
-    // Immediate Arithmetic Instructions: addi, subi
-    else if (strcasecmp(opcode, "addi") == 0 ||
-             strcasecmp(opcode, "subi") == 0)
+    // Immediate Arithmetic Instructions: addi, subi (Require 1 register + 1 immediate)
+    else if (strcasecmp(opcode, "addi") == 0 || strcasecmp(opcode, "subi") == 0)
     {
-        if (operandCount != 2) // ✅ Should expect only 2 operands: rd, L
+        if (operandCount != 2)
             error("Immediate arithmetic instructions require two operands (rd, imm)");
 
-        if (!isValidRegister(operands[0])) // ✅ Only one register (rd)
+        if (!isValidRegister(operands[0]))
             error("addi/subi: first operand must be a register");
 
-        if (!isValidImmediate(operands[1])) // ✅ Second operand must be an immediate (L)
-            error("addi/subi: second operand must be an immediate");
+        if (!isValidImmediate(operands[1], false, 12)) // 🔥 Unsigned 12-bit immediate
+            error("addi/subi: second operand must be a 12-bit unsigned immediate");
     }
-
     // Logical Operations: xor, and, or
     else if (strcasecmp(opcode, "xor") == 0 ||
              strcasecmp(opcode, "and") == 0 ||
@@ -213,6 +232,7 @@ bool validate_instruction(const char *line)
     {
         if (operandCount != 3)
             error("Logical operations require three operands (rd, rs, rt)");
+
         for (int i = 0; i < 3; i++)
         {
             if (!isValidRegister(operands[i]))
@@ -223,37 +243,35 @@ bool validate_instruction(const char *line)
     {
         if (operandCount != 2)
             error("not requires two operands (rd, rs)");
+
         if (!isValidRegister(operands[0]) || !isValidRegister(operands[1]))
             error("not: operands must be registers");
     }
-    // Branching and Control Flow: brr, br, call, return
     // Branching and Control Flow: brr, br, call, return
     else if (strcasecmp(opcode, "brr") == 0)
     {
         if (operandCount != 1)
             error("brr requires one operand (register or immediate)");
 
-        if (!isValidRegister(operands[0]) && !isValidImmediate(operands[0]))
-            error("brr: operand must be either a register (rd) or an immediate (L)");
+        if (!isValidRegister(operands[0]) && !isValidImmediate(operands[0], true, 12)) // 🔥 Signed 12-bit immediate
+            error("brr: operand must be either a register (rd) or a 12-bit signed immediate");
     }
-
     else if (strcasecmp(opcode, "br") == 0)
     {
         if (operandCount != 1)
-            error("br requires one operand (register or immediate)");
+            error("br requires one operand (register)");
 
-        if (!isValidRegister(operands[0]) && !isValidImmediate(operands[0]))
-            error("br: operand must be eeither a register (rd) or an immediate (L)");
+        if (!isValidRegister(operands[0]))
+            error("br: operand must be a register (rd)");
     }
     else if (strcasecmp(opcode, "call") == 0)
     {
-        if (operandCount != 3) // 🔥 Fix: Expect 3 operands
+        if (operandCount != 3)
             error("call requires three operands (r_d, r_s, r_t)");
 
         if (!isValidRegister(operands[0]) || !isValidRegister(operands[1]) || !isValidRegister(operands[2]))
             error("call: all three operands must be valid registers (r_d, r_s, r_t)");
     }
-
     else if (strcasecmp(opcode, "return") == 0)
     {
         if (operandCount != 0)
@@ -264,110 +282,49 @@ bool validate_instruction(const char *line)
     {
         if (operandCount != 3)
             error("ld requires three operands (rd, rs, imm)");
+
         if (!isValidRegister(operands[0]) || !isValidRegister(operands[1]))
             error("ld: first two operands must be registers");
-        if (!isValidImmediate(operands[2]))
-            error("ld: third operand must be an immediate");
+
+        if (!isValidImmediate(operands[2], true, 12)) // 🔥 Signed 12-bit immediate
+            error("ld: third operand must be a 12-bit signed immediate");
+    }
+    else if (strcasecmp(opcode, "shftri") == 0 || strcasecmp(opcode, "shftli") == 0)
+    {
+        if (operandCount != 2)
+            error("Shift immediate instructions require two operands (rd, imm)");
+
+        if (!isValidRegister(operands[0]))
+            error("Shift immediate: first operand must be a register");
+
+        if (!isValidImmediate(operands[1], false, 5)) // 🔥 Unsigned 5-bit immediate (for shift amount)
+            error("Shift immediate: second operand must be a 5-bit unsigned immediate");
     }
     else if (strcasecmp(opcode, "mov") == 0)
     {
         if (operandCount != 2)
             error("mov requires two operands");
-        if (operands[0][0] == '(')
-        { // register-to-memory form
-            char reg[10];
-            int L;
-            if (sscanf(operands[0], "(%[^)])(%d)", reg, &L) != 2)
-                error("mov: invalid syntax for register-to-memory form");
-            if (!isValidRegister(reg))
-                error("mov: invalid register in memory operand");
-            if (!isValidRegister(operands[1]))
-                error("mov: second operand must be a register");
-        }
-        else if (operands[1][0] == '(')
-        { // memory-to-register form
-            char reg[10];
-            int L;
-            if (sscanf(operands[1], "(%[^)])(%d)", reg, &L) != 2)
-                error("mov: invalid syntax for memory-to-register form");
-            if (!isValidRegister(reg))
-                error("mov: invalid register in memory operand");
-            if (!isValidRegister(operands[0]))
-                error("mov: first operand must be a register");
-        }
-        else
-        {
-            if (!isValidRegister(operands[0]))
-                error("mov: first operand must be a register");
-            if (operands[1][0] == 'r')
-            {
-                if (!isValidRegister(operands[1]))
-                    error("mov: second operand must be a register");
-            }
-            else
-            {
-                if (!isValidImmediate(operands[1]))
-                    error("mov: second operand must be an immediate");
-            }
-        }
-    }
-    // Privileged and System Operations: priv, trap, halt
-    else if (strcasecmp(opcode, "priv") == 0)
-    {
-        if (operandCount != 1)
-            error("priv requires one operand (immediate)");
-        if (!isValidImmediate(operands[0]))
-            error("priv: operand must be an immediate");
+
+        if (!isValidRegister(operands[0]) && !isValidRegister(operands[1]))
+            error("mov: both operands must be registers");
     }
     else if (strcasecmp(opcode, "trap") == 0)
     {
         if (operandCount != 1)
             error("trap requires one operand (immediate)");
-        if (!isValidImmediate(operands[0]))
-            error("trap: operand must be an immediate");
+
+        if (!isValidImmediate(operands[0], false, 12)) // 🔥 Unsigned 12-bit immediate
+            error("trap: operand must be a 12-bit unsigned immediate");
     }
     else if (strcasecmp(opcode, "halt") == 0)
     {
         if (operandCount != 0)
             error("halt takes no operands");
     }
-    // Floating Point Instructions: addf, subf, mulf, divf
-    else if (strcasecmp(opcode, "addf") == 0 ||
-             strcasecmp(opcode, "subf") == 0 ||
-             strcasecmp(opcode, "mulf") == 0 ||
-             strcasecmp(opcode, "divf") == 0)
-    {
-        if (operandCount != 3)
-            error("Floating point instructions require three operands");
-        for (int i = 0; i < 3; i++)
-        {
-            if (!isValidRegister(operands[i]))
-                error("Floating point instructions: operands must be registers");
-        }
-    }
-    // Shift Operations: shftr, shftl, shftri, shftli
-    else if (strcasecmp(opcode, "shftr") == 0 || strcasecmp(opcode, "shftl") == 0)
-    {
-        if (operandCount != 3)
-            error("Shift instructions require three operands (rd, rs, rt)");
-        for (int i = 0; i < 3; i++)
-        {
-            if (!isValidRegister(operands[i]))
-                error("Shift instructions: operands must be registers");
-        }
-    }
-    else if (strcasecmp(opcode, "shftri") == 0 || strcasecmp(opcode, "shftli") == 0)
-    {
-        if (operandCount != 2)
-            error("Shift immediate instructions require two operands (rd, imm)");
-        if (!isValidRegister(operands[0]))
-            error("Shift immediate: first operand must be a register");
-        if (!isValidImmediate(operands[1]))
-            error("Shift immediate: second operand must be an immediate");
-    }
-    // For unrecognized opcodes, you may choose to issue a warning.
+
     return true;
 }
+
 
 /* -------------------- expand_macro() -------------------- */
 void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
