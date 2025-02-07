@@ -371,6 +371,8 @@ void resolve_labels(ArrayList *instructions, LabelTable *labels) {
 // --- Write final output file ---
 // Each line is printed with its PC address (in hex) followed by the instruction or data literal.
 // In this output, we do not reinsert section directives; the entire output is a list of addresses.
+// --- Write final output file ---
+// Instead of printing memory addresses, output the proper assembly code with section directives and tab indents.
 void write_output_file(const char *output_filename, ArrayList *instructions) {
     FILE *fp = fopen(output_filename, "w");
     if (!fp) {
@@ -378,32 +380,56 @@ void write_output_file(const char *output_filename, ArrayList *instructions) {
         return;
     }
     
+    char current_section = '\0';
+    
+    // Process each instruction/data item in order.
     for (int i = 0; i < instructions->size; i++) {
         Line *line = &instructions->lines[i];
-        // Print the address
-        fprintf(fp, "0x%04X   ", line->program_counter);
-        // Print the instruction or data in the proper format.
+        
+        // When the section changes, output the appropriate directive.
+        if (line->type != current_section) {
+            if (line->type == 'I')
+                fprintf(fp, ".code\n");
+            else if (line->type == 'D')
+                fprintf(fp, ".data\n");
+            current_section = line->type;
+        }
+        
+        // Begin the line with a tab indent.
+        fprintf(fp, "\t");
+        
+        // Output code instructions.
         if (line->type == 'I') {
             if (strcmp(line->opcode, "xor") == 0) {
-                fprintf(fp, "%s %s, %s, %s", line->opcode,
+                fprintf(fp, "xor %s, %s, %s", 
                         line->registers[0], line->registers[1], line->registers[2]);
             } else if (strcmp(line->opcode, "subi") == 0 || strcmp(line->opcode, "addi") == 0) {
-                fprintf(fp, "%s %s, %s, %d", line->opcode,
-                        line->registers[0], line->registers[1], line->literal);
+                fprintf(fp, "%s %s, %s, %d", 
+                        line->opcode, line->registers[0], line->registers[1], line->literal);
             } else if (strcmp(line->opcode, "st") == 0 || strcmp(line->opcode, "ld") == 0) {
-                fprintf(fp, "%s %s, %s, %d", line->opcode,
-                        line->registers[0], line->registers[1], line->literal);
+                fprintf(fp, "%s %s, %s, %d", 
+                        line->opcode, line->registers[0], line->registers[1], line->literal);
             } else if (strcmp(line->opcode, "trap") == 0) {
-                fprintf(fp, "%s %d", line->opcode, line->literal);
+                fprintf(fp, "trap %d", line->literal);
             } else if (strcmp(line->opcode, "br") == 0) {
+                // The branch instruction operand may have been resolved to a hexadecimal address.
                 if (line->label[0] != '\0')
-                    fprintf(fp, "%s %s", line->opcode, line->label);
+                    fprintf(fp, "br %s", line->label);
                 else
-                    fprintf(fp, "%s %s", line->opcode, line->registers[0]);
+                    fprintf(fp, "br %s", line->registers[0]);
             } else {
+                // For any other opcode, print the opcode and any operands.
                 fprintf(fp, "%s", line->opcode);
+                for (int j = 0; j < line->operand_count; j++) {
+                    if (j == 0)
+                        fprintf(fp, " %s", line->operands[j]);
+                    else
+                        fprintf(fp, ", %s", line->operands[j]);
+                }
             }
-        } else if (line->type == 'D') {
+        }
+        // Output data literals.
+        else if (line->type == 'D') {
             fprintf(fp, "%d", line->literal);
         }
         fprintf(fp, "\n");

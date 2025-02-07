@@ -1,9 +1,15 @@
 .code
-	xor r1
-	subi r2
-	st r2
-	ld r3
-	addi r3
-	trap
-	call 0x1020
-	return
+	xor r1, r1, r1
+	subi r30, r30, 8
+	st r2, r30, 0
+	ld r3, r30, 0
+	addi r30, r30, 8
+	trap 0
+	subi r30, r30, 8
+	st r31, r30, 0
+	br 0x1028
+	ld r31, r30, 0
+	addi r30, r30, 8
+	br r31
+.data
+	9
