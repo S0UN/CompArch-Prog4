@@ -568,21 +568,25 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
 
     else if (strcasecmp(line_entry->opcode, "push") == 0)
     {
-        // push rd -> mov (r31)(-8), rd; subi r31, r31, 8
+        // push rd -> mov (r31)(-8), rd; subi r31, 8
+        // First instruction: mov (r31)(-8), rd
         strcpy(new_entry.opcode, "mov");
+        // Set operand 0 to the fixed memory operand "(r31)(-8)"
         snprintf(new_entry.operands[0], sizeof(new_entry.operands[0]), "(r31)(-8)");
+        // Set operand 1 to the register provided by the macro (rd)
         strncpy(new_entry.operands[1], line_entry->operands[0], sizeof(new_entry.operands[1]) - 1);
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
 
+        // Second instruction: subi r31, 8
         memset(&new_entry, 0, sizeof(Line));
         new_entry.type = 'I';
         strcpy(new_entry.opcode, "subi");
+        // For immediate arithmetic in our macro, we want to output "subi r31, 8"
         strcpy(new_entry.operands[0], "r31");
-        strcpy(new_entry.operands[1], "r31");
-        new_entry.literal = 8;
+        strcpy(new_entry.operands[1], "8");  // Use the literal "8" (as a string)
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
@@ -591,21 +595,24 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
     }
     else if (strcasecmp(line_entry->opcode, "pop") == 0)
     {
-        // pop rd -> mov rd, (r31)(0); addi r31, r31, 8
+        // pop rd -> mov rd, (r31)(0); addi r31, 8
+        // First instruction: mov rd, (r31)(0)
         strcpy(new_entry.opcode, "mov");
+        // Set operand 0 to the register provided (rd)
         strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+        // Set operand 1 to the fixed memory operand "(r31)(0)"
         snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "(r31)(0)");
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
 
+        // Second instruction: addi r31, 8
         memset(&new_entry, 0, sizeof(Line));
         new_entry.type = 'I';
         strcpy(new_entry.opcode, "addi");
         strcpy(new_entry.operands[0], "r31");
-        strcpy(new_entry.operands[1], "r31");
-        new_entry.literal = 8;
+        strcpy(new_entry.operands[1], "8");  // Use literal "8" instead of "r31"
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
