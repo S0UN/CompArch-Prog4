@@ -953,10 +953,24 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
         // Handle section directives.
         if (strncmp(buffer, ".code", 5) == 0) {
             in_code_section = 1;
+
+            // Store a section change in the ArrayList (to maintain order).
+            Line section_line;
+            memset(&section_line, 0, sizeof(Line));
+            strcpy(section_line.opcode, ".code");
+            section_line.type = 'S'; // Special type for section markers
+            add_to_arraylist(lines, section_line);
             continue;
         }
         if (strncmp(buffer, ".data", 5) == 0) {
             in_code_section = 0;
+
+            // Store a section change in the ArrayList (to maintain order).
+            Line section_line;
+            memset(&section_line, 0, sizeof(Line));
+            strcpy(section_line.opcode, ".data");
+            section_line.type = 'S'; // Special type for section markers
+            add_to_arraylist(lines, section_line);
             continue;
         }
 
@@ -965,17 +979,15 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
             continue;
         }
 
-        // For data section, if the line consists solely of a number, treat it as a data literal.
+        // Handle `.data` section entries.
         char *firstToken = strtok(buffer, " \t");
-        if (!in_code_section && (isdigit(firstToken[0]) || firstToken[0] == '-')) {
+        if (!in_code_section && firstToken && (isdigit(firstToken[0]) || firstToken[0] == '-')) {
             Line data_line;
             memset(&data_line, 0, sizeof(Line));
             data_line.program_counter = *address;
             data_line.size = 8; // Data items take 8 bytes.
             data_line.type = 'D';
-            // Save the literal as an integer value.
-            data_line.literal = (int)atoll(firstToken);
-            // Store the literal as text in the opcode field (so we can print it).
+            data_line.literal = (int)atoll(firstToken); // Store as a literal value.
             snprintf(data_line.opcode, sizeof(data_line.opcode), "%d", data_line.literal);
             data_line.operand_count = 0;
             add_to_arraylist(lines, data_line);
@@ -984,7 +996,6 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
         }
 
         // Otherwise, process as an instruction.
-        // Restore the original buffer for tokenization/validation.
         strcpy(buffer, original_buffer);
         remove_comments(buffer);
         trim_whitespace(buffer);
@@ -996,87 +1007,32 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
             return 1;
         }
 
-        printf("\nDEBUG: Tokenized Instruction -> %s\n", token);
-
         Line line_entry;
         memset(&line_entry, 0, sizeof(Line));
         line_entry.program_counter = *address;
         line_entry.size = in_code_section ? 4 : 8;
         line_entry.type = in_code_section ? 'I' : 'D';
         line_entry.from_call = 0;
+        strcpy(line_entry.opcode, token);
 
-        // Check if the instruction is a macro.
-        if (strcasecmp(token, "halt") == 0) {
-            // Special-case: halt takes no operands.
-            strcpy(line_entry.opcode, token);
-            line_entry.operand_count = 0;
-            char *validateCopy = strdup(original_buffer);
-            if (!validateCopy)
-                error("Memory allocation failed during macro validation");
-            validate_macro_instruction(validateCopy); // Should succeed.
-            free(validateCopy);
-            expand_macro(&line_entry, lines, address);
-        } else if (validate_macro(token)) {
-            // Validate macro using a duplicate.
-            char *validateCopy = strdup(original_buffer);
-            if (!validateCopy)
-                error("Memory allocation failed during macro validation");
-            validate_macro_instruction(validateCopy);
-            free(validateCopy);
-
-            // Duplicate the original line for tokenization.
-            char *macroLine = strdup(original_buffer);
-            if (!macroLine)
-                error("Memory allocation failed during macro expansion tokenization");
-
-            char *macroToken = strtok(macroLine, " \t");
-            strcpy(line_entry.opcode, macroToken);
-            int opCount = 0;
-            while ((macroToken = strtok(NULL, " \t,")) != NULL && opCount < 4) {
-                trim_whitespace(macroToken);
-                if (strlen(macroToken) > 0) {
-                    strncpy(line_entry.operands[opCount], macroToken, sizeof(line_entry.operands[opCount]) - 1);
-                    printf("DEBUG: Macro Operand[%d]: '%s'\n", opCount, line_entry.operands[opCount]);
-                    opCount++;
-                }
-            }
-            line_entry.operand_count = opCount;
-            free(macroLine);
-
-            expand_macro(&line_entry, lines, address);
-        } else {
-            strcpy(line_entry.opcode, token);
-            int opCount = 0;
-            while ((token = strtok(NULL, " \t,")) != NULL && opCount < 4) {
-                if (isMemoryOperand(token)) {
-                    strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
-                } else if (token[0] == 'r' && isValidRegister(token)) {
-                    strncpy(line_entry.registers[opCount], token, sizeof(line_entry.registers[opCount]) - 1);
-                    strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
-                } else if (isdigit(token[0]) || token[0] == '-') {
-                    line_entry.literal = atoi(token);
-                    strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
-                } else if (token[0] == ':') {
-                    strncpy(line_entry.label, token, sizeof(line_entry.label) - 1);
-                    strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
-                } else {
-                    strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
-                }
-                printf("DEBUG: Operand[%d]: %s\n", opCount, token);
-                opCount++;
-            }
-            line_entry.operand_count = opCount;
-            remove_comments(original_buffer);
-            validate_instruction(original_buffer);
-            add_to_arraylist(lines, line_entry);
-            *address += in_code_section ? 4 : 8;
+        int opCount = 0;
+        while ((token = strtok(NULL, " \t,")) != NULL && opCount < 4) {
+            trim_whitespace(token);
+            strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
+            opCount++;
         }
+        line_entry.operand_count = opCount;
+
+        // Validate and store the instruction.
+        remove_comments(original_buffer);
+        validate_instruction(original_buffer);
+        add_to_arraylist(lines, line_entry);
+        *address += in_code_section ? 4 : 8;
     }
 
     fclose(fp);
     return 0;
 }
-/* -------------------- write_output_file() -------------------- */
 void write_output_file(const char *output_filename, ArrayList *instructions)
 {
     FILE *fp = fopen(output_filename, "w");
@@ -1087,79 +1043,41 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
     }
 
     char current_section = '\0';
+    bool first_data_encountered = false;
+
     for (int i = 0; i < instructions->size; i++)
     {
         Line *line = &instructions->lines[i];
 
-        // Check for section change and print the directive without indentation
-        if (line->type != current_section)
-        {
-            if (line->type == 'I')
-                fprintf(fp, ".code\n");
-            else if (line->type == 'D')
+        // Handle section markers
+        if (line->type == 'S') {
+            if (strcasecmp(line->opcode, ".data") == 0) {
+                if (first_data_encountered) {
+                    fprintf(fp, "\n"); // Add a blank line before a new .data section
+                }
                 fprintf(fp, ".data\n");
-            current_section = line->type;
+                first_data_encountered = true;
+            } else if (strcasecmp(line->opcode, ".code") == 0) {
+                fprintf(fp, ".code\n");
+            }
+            continue;
         }
 
-        // Indent instructions with a tab
-        fprintf(fp, "\t");
-
-        // Formatting based on instruction type
-        if ((strcasecmp(line->opcode, "addi") == 0 || strcasecmp(line->opcode, "subi") == 0) && line->operand_count == 2)
-        {
-            fprintf(fp, "%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
+        // Handle data and instructions separately.
+        if (line->type == 'D') {
+            fprintf(fp, "\t%d\n", line->literal);
         }
-        else if (strcasecmp(line->opcode, "mov") == 0 && line->operand_count == 2)
-        {
-            fprintf(fp, "mov %s, %s", line->operands[0], line->operands[1]);
-        }
-        else if (strcasecmp(line->opcode, "xor") == 0 && line->operand_count == 3)
-        {
-            fprintf(fp, "xor %s, %s, %s", line->operands[0], line->operands[1], line->operands[2]);
-        }
-        else if (strcasecmp(line->opcode, "shftli") == 0 && line->operand_count == 2)
-        {
-            fprintf(fp, "shftli %s, %s", line->operands[0], line->operands[1]);
-        }
-        else if (strcasecmp(line->opcode, "st") == 0 || strcasecmp(line->opcode, "ld") == 0)
-        {
-            fprintf(fp, "%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
-
-            if (line->operand_count == 3)
-                fprintf(fp, ", %s", line->operands[2]); // Print third operand if present
-        }
-        else if (strcasecmp(line->opcode, "trap") == 0)
-        {
-            fprintf(fp, "trap %s", line->operands[0]);
-        }
-        else if (strcasecmp(line->opcode, "br") == 0)
-        {
-            if (line->label[0] != '\0')
-                fprintf(fp, "br %s", line->label);
-            else
-                fprintf(fp, "br %s", line->operands[0]);
-        }
-        else if (strcasecmp(line->opcode, "priv") == 0 && line->operand_count == 4)
-        {
-            fprintf(fp, "priv %s, %s, %s, %s", line->operands[0], line->operands[1], line->operands[2], line->operands[3]);
-        }
-        else
-        {
-            // General instruction format
-            fprintf(fp, "%s", line->opcode);
-            for (int j = 0; j < line->operand_count; j++)
-            {
+        else {
+            fprintf(fp, "\t%s", line->opcode);
+            for (int j = 0; j < line->operand_count; j++) {
                 if (j == 0)
                     fprintf(fp, " %s", line->operands[j]);
                 else
                     fprintf(fp, ", %s", line->operands[j]);
             }
+            fprintf(fp, "\n");
         }
-
-        // Add a newline after each instruction
-        fprintf(fp, "\n");
     }
 
     fclose(fp);
 }
-
