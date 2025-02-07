@@ -7,7 +7,7 @@
 #include "arraylist.h"
 #include "label_table.h"
 #include "line.h"
-LabelTable *labels = NULL; // Global declaration
+LabelTable *labels = NULL; 
 int main(int argc, char *argv[]) {
     if (argc != 3) {
         printf("Usage: %s <input_file> <output_file>\n", argv[0]);
@@ -34,7 +34,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // 🔥 **THIS IS THE IMPORTANT PART: Call `resolve_labels()` here!**
     printf("\nDEBUG: Resolving labels...\n");
     resolve_labels(&instructions, labels);
     printf("DEBUG: Label resolution complete!\n");
@@ -50,7 +49,6 @@ int main(int argc, char *argv[]) {
 
 
 
-/* -------------------- Helper Functions -------------------- */
 void trim_whitespace(char *line)
 {
     int start = 0;
@@ -73,7 +71,6 @@ void remove_comments(char *line)
     trim_whitespace(line); // Ensure no trailing spaces remain
 }
 
-/* -------------------- Syntax Validation Helpers -------------------- */
 bool isValidRegister(const char *reg)
 {
     if (reg[0] != 'r' && reg[0] != 'R')
@@ -93,7 +90,7 @@ bool isValidImmediate(const char *imm, bool allow_negative, int bit_size)
     bool neg = false;
     if (*imm == '-')
     {
-        if (!allow_negative) // If negatives aren't allowed (e.g., in unsigned immediate fields)
+        if (!allow_negative) 
             return false;
         neg = true;
         imm++;
@@ -176,7 +173,6 @@ bool isValidMemoryAddress(const char *str) {
     return true;
 }
 
-/* -------------------- New Helper Functions -------------------- */
 int validate_label_format(char *token)
 {
     if (token[0] != ':')
@@ -224,7 +220,7 @@ int validate_spacing(const char *line)
     // Tokenize to get the opcode
     char *opcode = strtok(lineCopy, " \t");
     if (!opcode)
-        return 1; // No opcode, treat as valid (should be caught elsewhere if needed)
+        return 1; 
 
     // Handle the special cases where "halt" and "return" don't require a space afterward
     if (strcasecmp(opcode, "halt") == 0 || strcasecmp(opcode, "return") == 0)
@@ -236,7 +232,7 @@ int validate_spacing(const char *line)
             fprintf(stderr, "Syntax Error: 'halt' and 'return' must not be followed by additional characters: %s\n", line);
             return 0;
         }
-        return 1; // "halt" and "return" are valid with no spaces after them
+        return 1;
     }
 
     // For other opcodes, ensure they are followed by exactly one space
@@ -393,7 +389,6 @@ bool validate_macro_instruction(const char *line)
     return true;
 }
 
-/* -------------------- validate_instruction() -------------------- */
 bool validate_instruction(const char *line)
 {
     char opcode[20];
@@ -754,7 +749,6 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
         value = strtoll(line_entry->operands[1], NULL, 0); // Parse immediate value
     }
 
-    // Step 1: Clear the register using "xor rd, rd, rd".
     Line new_entry;
     memset(&new_entry, 0, sizeof(Line));
     strcpy(new_entry.opcode, "xor");
@@ -766,9 +760,6 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
     new_entry.type = 'I';
     add_to_arraylist(instruction_list, new_entry);
     (*address) += 4;
-
-    // Step 2: Now we load the value, split if necessary.
-    // If the literal fits in a 12-bit immediate (0-4095), use a single addi.
     if (value >= 0 && value <= 4095) {
         memset(&new_entry, 0, sizeof(Line));
         new_entry.type = 'I';
@@ -1139,7 +1130,6 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
     fclose(fp);
     return 0;
 }
-/* -------------------- write_output_file() -------------------- */
 void write_output_file(const char *output_filename, ArrayList *instructions)
 {
     FILE *fp = fopen(output_filename, "w");
