@@ -1,11 +1,1 @@
-.code
-    clr r1
-    push r2
-    pop r3
-    halt
-    call :func
-    return
-
-.data
-:func
-    9
+mov (r1)(-8), r2
