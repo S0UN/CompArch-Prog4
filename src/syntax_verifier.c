@@ -199,6 +199,8 @@ int validate_macro(char *token)
     }
     return 0;
 }
+
+
 int validate_spacing(const char *line)
 {
     // Make a duplicate of the input line so we don't modify the caller's copy.
@@ -210,64 +212,52 @@ int validate_spacing(const char *line)
     if (lineCopy[0] == ':' || lineCopy[0] == '.')
         return 1;
 
-    // Trim leading whitespace to check indentation.
-
     // Check that the original line starts with a tab or exactly four spaces.
-   if (!(lineCopy[0] == '\t' || (lineCopy[0] == ' ' && lineCopy[1] == ' ' && lineCopy[2] == ' ' && lineCopy[3] == ' '))) {
-    // Debug print statements
-    printf("DEBUG: First four characters of lineCopy:\n");
-    printf("  lineCopy[0]: '%c' (ASCII %d)\n", lineCopy[0], lineCopy[0]);
-    printf("  lineCopy[1]: '%c' (ASCII %d)\n", lineCopy[1], lineCopy[1]);
-    printf("  lineCopy[2]: '%c' (ASCII %d)\n", lineCopy[2], lineCopy[2]);
-    printf("  lineCopy[3]: '%c' (ASCII %d)\n", lineCopy[3], lineCopy[3]);
+    if (!(lineCopy[0] == '\t' || (lineCopy[0] == ' ' && lineCopy[1] == ' ' && lineCopy[2] == ' ' && lineCopy[3] == ' ')))
+    {
+        fprintf(stderr, "Syntax Error: Instruction must be indented with a tab or exactly 4 spaces: %s\n", line);
+        return 0;
+    }
 
-    fprintf(stderr, "Syntax Error: Instruction must be indented with a tab or exactly 4 spaces: %s\n", line);
-    return 0;
-}
     trim_whitespace(lineCopy);
 
+    // Tokenize to get the opcode
+    char *opcode = strtok(lineCopy, " \t");
+    if (!opcode)
+        return 1; // No opcode, treat as valid (should be caught elsewhere if needed)
 
-    // Now, make another copy to trim internal spacing for tokenization.
-    char *trimmedCopy = strdup(lineCopy);
-    if (!trimmedCopy)
+    // Handle the special cases where "halt" and "return" don't require a space afterward
+    if (strcasecmp(opcode, "halt") == 0 || strcasecmp(opcode, "return") == 0)
     {
-        perror("Memory allocation failed in validate_spacing");
-        exit(1);
+        // If there's another token after "halt" or "return", it's an error
+        char *extraToken = strtok(NULL, " \t");
+        if (extraToken)
+        {
+            fprintf(stderr, "Syntax Error: 'halt' and 'return' must not be followed by additional characters: %s\n", line);
+            return 0;
+        }
+        return 1; // "halt" and "return" are valid with no spaces after them
     }
-    trim_whitespace(trimmedCopy);
 
+    // For other opcodes, ensure they are followed by exactly one space
+    int opcode_len = strlen(opcode);
+    if (lineCopy[opcode_len] != ' ' && lineCopy[opcode_len] != '\0')
+    {
+        fprintf(stderr, "Syntax Error: Opcode must be followed by exactly one space: %s\n", line);
+        return 0;
+    }
+
+    // Validate operand spacing
     char *tokens[5];
     int token_count = 0;
-    char *token = strtok(trimmedCopy, " ");
+    char *token = strtok(NULL, " \t");
     while (token && token_count < 5)
     {
         tokens[token_count++] = token;
-        token = strtok(NULL, " ");
+        token = strtok(NULL, " \t");
     }
 
-    // Ensure we have at least one token (the opcode)
-    if (token_count < 1)
-    {
-        free(trimmedCopy);
-        return 1; // No opcode, treat as valid (should be caught elsewhere if needed)
-    }
-
-    // For "halt" or "return", skip the check for a following space.
-    if (!(strcasecmp(tokens[0], "halt") == 0 || strcasecmp(tokens[0], "return") == 0))
-    {
-        int opcode_len = strlen(tokens[0]);
-
-        // We check the original (untrimmed) copy to see if there is exactly one space.
-        if (lineCopy[opcode_len] != ' ')
-        {
-            free(trimmedCopy);
-            fprintf(stderr, "Syntax Error: Opcode must be followed by exactly one space: %s\n", lineCopy);
-            return 0;
-        }
-    }
-
-    // **Fix: Allow labels without trailing commas**
-    for (int i = 1; i < token_count; i++)
+    for (int i = 0; i < token_count; i++)
     {
         int len = strlen(tokens[i]);
 
@@ -278,14 +268,14 @@ int validate_spacing(const char *line)
         // Only enforce commas if there is another operand after this one
         if (i < token_count - 1 && tokens[i][len - 1] != ',')
         {
-            free(trimmedCopy);
-            fprintf(stderr, "Syntax Error: Incorrect spacing around operands: %s\n", lineCopy);
+            fprintf(stderr, "Syntax Error: Incorrect spacing around operands: %s\n", line);
             return 0;
         }
     }
-    free(trimmedCopy);
+
     return 1;
 }
+
 
 bool validate_macro_instruction(const char *line)
 {
