@@ -14,6 +14,5 @@ void store_label(LabelTable **labels, const char *label, int address, int in_cod
 int get_label_address(LabelTable *labels, const char *label);
 int is_label_in_code(LabelTable *labels, const char *label);
 void free_label_table(LabelTable *labels);
-LabelTable *create_label_table();  // **Added this function declaration**
 
 #endif

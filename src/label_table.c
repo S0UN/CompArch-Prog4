@@ -10,26 +10,49 @@ void store_label(LabelTable **labels, const char *label, int address, int in_cod
         printf("Error: Duplicate label definition '%s'\n", label);
         return;
     }
+
     entry = (LabelTable *)malloc(sizeof(LabelTable));
     if (!entry) {
         perror("Memory allocation error for label");
         exit(EXIT_FAILURE);
     }
-    strcpy(entry->label, label);
+
+    char clean_label[20];
+    strncpy(clean_label, label, sizeof(clean_label) - 1);
+    clean_label[sizeof(clean_label) - 1] = '\0'; 
+
+    strcpy(entry->label, clean_label);
     entry->address = address;
-    entry->in_code_section = in_code_section;  
+    entry->in_code_section = in_code_section;
+
     HASH_ADD_STR(*labels, label, entry);
+
+    printf("DEBUG: Stored Label -> '%s' at address %d\n", entry->label, entry->address);
 }
 
-// Function to initialize and return an empty label table
-LabelTable *create_label_table() {
-    return NULL;  // Since we're using uthash, the table starts as NULL
-}
+
+
 int get_label_address(LabelTable *labels, const char *label) {
+    printf("DEBUG: Looking up label: '%s'\n", label); // <-- Print the label being searched
+
     LabelTable *entry;
-    HASH_FIND_STR(labels, label, entry);
-    return (entry) ? entry->address : -1;
+    
+    // Print all stored labels for debugging
+    for (entry = labels; entry != NULL; entry = entry->hh.next) {
+        printf("DEBUG: Stored Label -> '%s' at address %d\n", entry->label, entry->address);
+    }
+
+    HASH_FIND_STR(labels, label, entry); // Look up the label
+
+    if (entry) {
+        printf("DEBUG: Label '%s' found at address %d\n", label, entry->address);
+        return entry->address;
+    } else {
+        printf("ERROR: Label '%s' NOT FOUND!\n", label);
+        return -1;
+    }
 }
+
 
 int is_label_in_code(LabelTable *labels, const char *label) {
     LabelTable *entry;

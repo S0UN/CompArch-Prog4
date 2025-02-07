@@ -8,8 +8,6 @@
 #include "label_table.h"
 #include "line.h"
 LabelTable *labels = NULL; // Global declaration
-
-
 int main(int argc, char *argv[]) {
     if (argc != 3) {
         printf("Usage: %s <input_file> <output_file>\n", argv[0]);
@@ -18,7 +16,6 @@ int main(int argc, char *argv[]) {
 
     ArrayList instructions;
     initialize_arraylist(&instructions);
-
     int address = 0x1000; // PC starts at 0x1000
 
     // First pass: Collect labels.
@@ -29,7 +26,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Second pass: Expand macros and resolve labels.
+    // Second pass: Expand macros and collect instructions.
     if (process_file_second_pass(argv[1], &instructions, labels, &address) != 0) {
         printf("Error processing file during second pass.\n");
         free_arraylist(&instructions);
@@ -37,7 +34,12 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Write the output file.
+    // 🔥 **THIS IS THE IMPORTANT PART: Call `resolve_labels()` here!**
+    printf("\nDEBUG: Resolving labels...\n");
+    resolve_labels(&instructions, labels);
+    printf("DEBUG: Label resolution complete!\n");
+
+    // Write the final output file
     write_output_file(argv[2], &instructions);
 
     free_arraylist(&instructions);
@@ -845,40 +847,84 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
     }
-}
-
-
-/* -------------------- resolve_labels() -------------------- */
-void resolve_labels(ArrayList *instructions, LabelTable *labels)
-{
-    for (int i = 0; i < instructions->size; i++)
-    {
+}void resolve_labels(ArrayList *instructions, LabelTable *labels) {
+    for (int i = 0; i < instructions->size; i++) {
         Line *line = &instructions->lines[i];
+
         // Resolve the dedicated label field, if it starts with a colon.
-        if (line->label[0] == ':')
-        {
+        if (line->label[0] == ':') {
             char lbl[20];
-            strcpy(lbl, line->label + 1); // Remove the colon.
-            trim_whitespace(lbl);
+            strcpy(lbl, line->label + 1);  // Remove the colon
+            trim_whitespace(lbl);          // Ensure no leading/trailing spaces
+
+            printf("DEBUG: Resolving label '%s' (without colon)\n", lbl);
             int addr = get_label_address(labels, lbl);
-            if (addr != -1)
-                snprintf(line->label, sizeof(line->label), "0x%X", addr);
+
+            if (addr != -1) {
+                snprintf(line->label, sizeof(line->label), "%d", addr);
+                printf("DEBUG: Label '%s' resolved to address %d\n", lbl, addr);
+            } else {
+                printf("ERROR: Label '%s' not found in label table!\n", lbl);
+                strcpy(line->label, "UNRESOLVED");
+            }
+        } else if (line->label[0] != '\0') {  // Handle labels without colons
+            char lbl[20];
+            strncpy(lbl, line->label, sizeof(lbl) - 1);
+            lbl[sizeof(lbl) - 1] = '\0';
+            trim_whitespace(lbl);
+
+            printf("DEBUG: Resolving label '%s' (direct lookup)\n", lbl);
+            int addr = get_label_address(labels, lbl);
+
+            if (addr != -1) {
+                snprintf(line->label, sizeof(line->label), "%d", addr);
+                printf("DEBUG: Label '%s' resolved to address %d\n", lbl, addr);
+            } else {
+                printf("ERROR: Label '%s' not found in label table!\n", lbl);
+                strcpy(line->label, "UNRESOLVED");
+            }
         }
+
         // Also resolve any operand that begins with a colon.
-        for (int j = 0; j < line->operand_count; j++)
-        {
-            if (line->operands[j][0] == ':')
-            {
+        for (int j = 0; j < line->operand_count; j++) {
+            if (line->operands[j][0] == ':') {
                 char lbl[20];
-                strcpy(lbl, line->operands[j] + 1); // Skip the colon.
+                strcpy(lbl, line->operands[j] + 1);  // Remove the colon
                 trim_whitespace(lbl);
+
+                printf("DEBUG: Resolving operand label '%s' (without colon)\n", lbl);
                 int addr = get_label_address(labels, lbl);
-                if (addr != -1)
-                    snprintf(line->operands[j], sizeof(line->operands[j]), "0x%X", addr);
+
+                if (addr != -1) {
+                    snprintf(line->operands[j], sizeof(line->operands[j]), "%d", addr);
+                    printf("DEBUG: Operand label '%s' resolved to address %d\n", lbl, addr);
+                } else {
+                    printf("ERROR: Operand Label '%s' not found in label table!\n", lbl);
+                    strcpy(line->operands[j], "UNRESOLVED");
+                }
+            } else if (isLabelSyntax(line->operands[j])) { // Handle labels without colons
+                char lbl[20];
+                strncpy(lbl, line->operands[j], sizeof(lbl) - 1);
+                lbl[sizeof(lbl) - 1] = '\0';
+                trim_whitespace(lbl);
+
+                printf("DEBUG: Resolving operand label '%s' (direct lookup)\n", lbl);
+                int addr = get_label_address(labels, lbl);
+
+                if (addr != -1) {
+                    snprintf(line->operands[j], sizeof(line->operands[j]), "%d", addr);
+                    printf("DEBUG: Operand label '%s' resolved to address %d\n", lbl, addr);
+                } else {
+                    printf("ERROR: Operand Label '%s' not found in label table!\n", lbl);
+                    strcpy(line->operands[j], "UNRESOLVED");
+                }
             }
         }
     }
 }
+
+
+
 int process_file_first_pass(const char *input_filename, LabelTable **labels, int *address) {
     FILE *fp = fopen(input_filename, "r");
     if (!fp) {
@@ -889,6 +935,8 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
     char buffer[256];
     int in_code_section = 1; // 1 = .code, 0 = .data
 
+    printf("DEBUG: Starting first pass...\n");
+
     while (fgets(buffer, sizeof(buffer), fp)) {
         remove_comments(buffer);
         trim_whitespace(buffer);
@@ -898,10 +946,12 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
         // Handle section directives.
         if (strncmp(buffer, ".code", 5) == 0) {
             in_code_section = 1;
+            printf("DEBUG: Entering .code section at address %d\n", *address);
             continue;
         }
         if (strncmp(buffer, ".data", 5) == 0) {
             in_code_section = 0;
+            printf("DEBUG: Entering .data section at address %d\n", *address);
             continue;
         }
 
@@ -912,6 +962,7 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
                 fclose(fp);
                 return 1;
             }
+
             // Trim the label first.
             char tempLabel[50];
             strncpy(tempLabel, buffer, sizeof(tempLabel) - 1);
@@ -920,15 +971,20 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
 
             // Store the label in the label table.
             store_label(labels, tempLabel + 1, *address, in_code_section);
+            printf("DEBUG: Stored Label -> %s at address %d\n", tempLabel + 1, *address);
         } else {
             // Increment address for instructions or data.
             *address += in_code_section ? 4 : 8;
+            printf("DEBUG: Processed instruction/data, updated address to %d\n", *address);
         }
     }
+
+    printf("DEBUG: First pass completed.\n");
 
     fclose(fp);
     return 0;
 }
+
 int process_file_second_pass(const char *input_filename, ArrayList *lines, LabelTable *labels, int *address) {
     FILE *fp = fopen(input_filename, "r");
     if (!fp) {

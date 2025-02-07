@@ -1,5 +1,5 @@
 .code
 	add r1, r2, r3
 	sub r4, r5, r6
-	br :label2
+	br 4108
 	mul r7, r8, r9
