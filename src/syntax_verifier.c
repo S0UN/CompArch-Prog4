@@ -56,20 +56,26 @@ bool isValidImmediate(const char *imm, bool allow_negative, int bit_size)
 
     long min_val, max_val;
 
-    if (bit_size == 12) {  // 12-bit immediate range
-        if (allow_negative) {
+    if (bit_size == 12)
+    { // 12-bit immediate range
+        if (allow_negative)
+        {
             min_val = -2048; // 2's complement signed 12-bit
             max_val = 2047;
-        } else {
+        }
+        else
+        {
             min_val = 0;
             max_val = 4095; // Unsigned 12-bit
         }
-    } 
-    else if (bit_size == 5) {  // 🔥 Add case for 5-bit immediate range
+    }
+    else if (bit_size == 5)
+    { // 🔥 Add case for 5-bit immediate range
         min_val = 0;
-        max_val = 31;  // 5-bit unsigned values: 0-31
-    } 
-    else {
+        max_val = 31; // 5-bit unsigned values: 0-31
+    }
+    else
+    {
         return false; // Unsupported immediate size
     }
 
@@ -77,7 +83,7 @@ bool isValidImmediate(const char *imm, bool allow_negative, int bit_size)
     char *endptr;
 
     if (imm[0] == '0' && (imm[1] == 'x' || imm[1] == 'X'))
-    {   
+    {
         val = strtol(imm + 2, &endptr, 16); // Parse as hex
     }
     else
@@ -93,8 +99,6 @@ bool isValidImmediate(const char *imm, bool allow_negative, int bit_size)
 
     return (val >= min_val && val <= max_val);
 }
-
-
 
 bool isMemoryOperand(const char *operand)
 {
@@ -258,25 +262,36 @@ bool validate_instruction(const char *line)
     else if (strcasecmp(opcode, "brr") == 0)
     {
         if (operandCount != 1)
-            error("brr requires one operand (register or immediate)");
+            error("brr requires one operand (register, label, or immediate)");
 
-        if (!isValidRegister(operands[0]) && !isValidImmediate(operands[0], true, 12)) // 🔥 Signed 12-bit immediate
-            error("brr: operand must be either a register (rd) or a 12-bit signed immediate");
+        if (!isValidRegister(operands[0]) && !isValidImmediate(operands[0], true, 12) && !isLabelSyntax(operands[0]))
+            error("brr: operand must be a register, a 12-bit signed immediate, or a label");
     }
+    else if (strcasecmp(opcode, "brnz") == 0)
+    {
+        if (operandCount != 2)
+            error("brnz requires two operands (rd, rs)");
+
+        if (!isValidRegister(operands[1]))
+            error("brnz: second operand (rs) must be a register");
+
+        if (!isValidRegister(operands[0]) && !isLabelSyntax(operands[0]))
+            error("brnz: first operand (rd) must be a register or a label");
+    }
+
     else if (strcasecmp(opcode, "br") == 0)
     {
         if (operandCount != 1)
-            error("br requires one operand (register)");
+            error("br requires one operand (register or label)");
 
-        if (!isValidRegister(operands[0]))
-            error("br: operand must be a register (rd)");
+        if (!isValidRegister(operands[0]) && !isLabelSyntax(operands[0]))
+            error("br: operand must be a register or a label");
     }
+
     else if (strcasecmp(opcode, "call") == 0)
     {
         if (operandCount != 1)
             error("call requires three operands (r_d, r_s, r_t)");
-
-  
     }
     else if (strcasecmp(opcode, "return") == 0)
     {
@@ -440,49 +455,47 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         return;
     }
     else if (strcasecmp(line_entry->opcode, "ld") == 0)
-{
-    // ld rd, L -> Load 48-bit address L into rd
-    long long value = atoll(line_entry->operands[1]);
-
-    // Step 1: Clear rd (xor rd, rd, rd)
-    strcpy(new_entry.opcode, "xor");
-    strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-    strncpy(new_entry.operands[1], new_entry.operands[0], sizeof(new_entry.operands[1]) - 1);
-    strncpy(new_entry.operands[2], new_entry.operands[0], sizeof(new_entry.operands[2]) - 1);
-    new_entry.operand_count = 3;
-    new_entry.program_counter = (*address);
-    add_to_arraylist(instruction_list, new_entry);
-    (*address) += 4;
-
-    // Step 2: Load the value bit by bit
-    for (int shift = 40; shift >= 0; shift -= 12)
     {
-        // Left shift by 12
-        memset(&new_entry, 0, sizeof(Line));
-        new_entry.type = 'I';
-        strcpy(new_entry.opcode, "shftli");
+        // ld rd, L -> Load 48-bit address L into rd
+        long long value = atoll(line_entry->operands[1]);
+
+        // Step 1: Clear rd (xor rd, rd, rd)
+        strcpy(new_entry.opcode, "xor");
         strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-        snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%d", 12);
-        new_entry.operand_count = 2;
+        strncpy(new_entry.operands[1], new_entry.operands[0], sizeof(new_entry.operands[1]) - 1);
+        strncpy(new_entry.operands[2], new_entry.operands[0], sizeof(new_entry.operands[2]) - 1);
+        new_entry.operand_count = 3;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
 
-        // Add the next chunk of L
-        memset(&new_entry, 0, sizeof(Line));
-        new_entry.type = 'I';
-        strcpy(new_entry.opcode, "addi");
-        strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-        snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%lld", (value >> shift) & 0xFFF);
-        new_entry.operand_count = 2;
-        new_entry.program_counter = (*address);
-        add_to_arraylist(instruction_list, new_entry);
-        (*address) += 4;
+        // Step 2: Load the value bit by bit
+        for (int shift = 40; shift >= 0; shift -= 12)
+        {
+            // Left shift by 12
+            memset(&new_entry, 0, sizeof(Line));
+            new_entry.type = 'I';
+            strcpy(new_entry.opcode, "shftli");
+            strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+            snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%d", 12);
+            new_entry.operand_count = 2;
+            new_entry.program_counter = (*address);
+            add_to_arraylist(instruction_list, new_entry);
+            (*address) += 4;
+
+            // Add the next chunk of L
+            memset(&new_entry, 0, sizeof(Line));
+            new_entry.type = 'I';
+            strcpy(new_entry.opcode, "addi");
+            strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+            snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%lld", (value >> shift) & 0xFFF);
+            new_entry.operand_count = 2;
+            new_entry.program_counter = (*address);
+            add_to_arraylist(instruction_list, new_entry);
+            (*address) += 4;
+        }
     }
 }
-
-}
-
 
 void error(const char *message)
 {

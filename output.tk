@@ -1,13 +1,9 @@
 .code
-	xor r0, r0, r0
-	xor r5, r5, r5
-	shftli r5, 12
-	addi r5, 0
-	shftli r5, 12
-	addi r5, 0
-	shftli r5, 12
-	addi r5, 0
-	shftli r5, 12
-	addi r5, 0
-	br r5
+	br 0x1008
 	priv r0, r0, r0, 
+	xor r1, r1, r1
+	mov (r31)(-8), r2
+	subi r31, r31
+	mov r3, (r31)(0)
+	addi r31, r31
+	br 0x1008
