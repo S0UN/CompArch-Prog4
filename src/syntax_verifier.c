@@ -794,7 +794,7 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
 
         if (validate_macro(token))
         {
-            // validate_macro_instruction(original_buffer);
+             validate_macro_instruction(original_buffer);
 
             strcpy(line_entry.opcode, token);
             int opCount = 0;
