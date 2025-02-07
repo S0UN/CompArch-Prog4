@@ -1,5 +1,5 @@
 .code
-	mov , (r31)(0)
+	mov r1, (r31)(0)
 	addi r31, 8
-	mov (r31)(-8), 
+	mov (r31)(-8), r2
 	subi r31, 8

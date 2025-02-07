@@ -577,7 +577,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         strcpy(new_entry.opcode, "subi");
         // For immediate arithmetic in our macro, we want to output "subi r31, 8"
         strcpy(new_entry.operands[0], "r31");
-        strcpy(new_entry.operands[1], "8");  // Use the literal "8" (as a string)
+        strcpy(new_entry.operands[1], "8"); // Use the literal "8" (as a string)
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
@@ -603,7 +603,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         new_entry.type = 'I';
         strcpy(new_entry.opcode, "addi");
         strcpy(new_entry.operands[0], "r31");
-        strcpy(new_entry.operands[1], "8");  // Use literal "8" instead of "r31"
+        strcpy(new_entry.operands[1], "8"); // Use literal "8" instead of "r31"
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
@@ -638,70 +638,71 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
         return;
-    }else if (strcasecmp(line_entry->opcode, "ld") == 0)
-{
-    // ld rd, L -> Load literal L into rd using a sequence of instructions.
-    // Convert the second operand to a long long value (assumed to be decimal).
-    long long value = atoll(line_entry->operands[1]);
-
-    // Step 1: Clear rd: xor rd, rd, rd
-    strcpy(new_entry.opcode, "xor");
-    // Use the first operand (rd) for all register fields
-    strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-    strncpy(new_entry.operands[1], line_entry->operands[0], sizeof(new_entry.operands[1]) - 1);
-    strncpy(new_entry.operands[2], line_entry->operands[0], sizeof(new_entry.operands[2]) - 1);
-    new_entry.operand_count = 3;
-    new_entry.program_counter = (*address);
-    add_to_arraylist(instruction_list, new_entry);
-    (*address) += 4;
-
-    // If the literal fits in a 12-bit unsigned immediate (0-4095),
-    // then load it in a single addi instruction.
-    if (value >= 0 && value <= 4095)
+    }
+    else if (strcasecmp(line_entry->opcode, "ld") == 0)
     {
-        memset(&new_entry, 0, sizeof(Line));
-        new_entry.type = 'I';
-        strcpy(new_entry.opcode, "addi");
-        // Use the target register (rd)
+        // ld rd, L -> Load literal L into rd using a sequence of instructions.
+        // Convert the second operand to a long long value (assumed to be decimal).
+        long long value = atoll(line_entry->operands[1]);
+
+        // Step 1: Clear rd: xor rd, rd, rd
+        strcpy(new_entry.opcode, "xor");
+        // Use the first operand (rd) for all register fields
         strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-        // Print the immediate as a decimal string.
-        snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%lld", value);
-        new_entry.operand_count = 2;
+        strncpy(new_entry.operands[1], line_entry->operands[0], sizeof(new_entry.operands[1]) - 1);
+        strncpy(new_entry.operands[2], line_entry->operands[0], sizeof(new_entry.operands[2]) - 1);
+        new_entry.operand_count = 3;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
-    }
-    else
-    {
-        // Otherwise, load the literal in 12-bit chunks using a loop.
-        // (This is a simplified method to load a 48-bit literal.)
-        for (int shift = 40; shift >= 0; shift -= 12)
+
+        // If the literal fits in a 12-bit unsigned immediate (0-4095),
+        // then load it in a single addi instruction.
+        if (value >= 0 && value <= 4095)
         {
             memset(&new_entry, 0, sizeof(Line));
             new_entry.type = 'I';
-            strcpy(new_entry.opcode, "shftli");
-            // Operand 0 is the register (rd)
-            strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-            // Operand 1 is the shift amount, here hardcoded as "12"
-            snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "12");
-            new_entry.operand_count = 2;
-            new_entry.program_counter = (*address);
-            add_to_arraylist(instruction_list, new_entry);
-            (*address) += 4;
-
-            memset(&new_entry, 0, sizeof(Line));
-            new_entry.type = 'I';
             strcpy(new_entry.opcode, "addi");
+            // Use the target register (rd)
             strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-            // Compute the next 12-bit chunk and print it in decimal.
-            snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%lld", (value >> shift) & 0xFFF);
+            // Print the immediate as a decimal string.
+            snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%lld", value);
             new_entry.operand_count = 2;
             new_entry.program_counter = (*address);
             add_to_arraylist(instruction_list, new_entry);
             (*address) += 4;
         }
+        else
+        {
+            // Otherwise, load the literal in 12-bit chunks using a loop.
+            // (This is a simplified method to load a 48-bit literal.)
+            for (int shift = 40; shift >= 0; shift -= 12)
+            {
+                memset(&new_entry, 0, sizeof(Line));
+                new_entry.type = 'I';
+                strcpy(new_entry.opcode, "shftli");
+                // Operand 0 is the register (rd)
+                strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+                // Operand 1 is the shift amount, here hardcoded as "12"
+                snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "12");
+                new_entry.operand_count = 2;
+                new_entry.program_counter = (*address);
+                add_to_arraylist(instruction_list, new_entry);
+                (*address) += 4;
+
+                memset(&new_entry, 0, sizeof(Line));
+                new_entry.type = 'I';
+                strcpy(new_entry.opcode, "addi");
+                strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+                // Compute the next 12-bit chunk and print it in decimal.
+                snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%lld", (value >> shift) & 0xFFF);
+                new_entry.operand_count = 2;
+                new_entry.program_counter = (*address);
+                add_to_arraylist(instruction_list, new_entry);
+                (*address) += 4;
+            }
+        }
     }
-}
 
     // If the instruction is not a defined macro, do nothing.
 }
@@ -807,22 +808,38 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
         }
 
         printf("\nDEBUG: Tokenized Instruction -> %s\n", token);
-
         if (validate_macro(token))
         {
-            // validate_macro_instruction(original_buffer);
+            // First, validate using a duplicate of the original line.
+            char *validateCopy = strdup(original_buffer);
+            if (!validateCopy)
+                error("Memory allocation failed during macro validation");
+            validate_macro_instruction(validateCopy);
+            free(validateCopy);
 
-            strcpy(line_entry.opcode, token);
+            // Now, duplicate the original line for tokenization for expansion.
+            char *macroLine = strdup(original_buffer);
+            if (!macroLine)
+                error("Memory allocation failed during macro expansion tokenization");
+
+            // Tokenize the macro line.
+            char *macroToken = strtok(macroLine, " \t");
+            strcpy(line_entry.opcode, macroToken);
             int opCount = 0;
-            while ((token = strtok(NULL, " \t,")) != NULL && opCount < 4)
+            while ((macroToken = strtok(NULL, " \t,")) != NULL && opCount < 4)
             {
-                strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
-                printf("DEBUG: Macro Operand[%d]: %s\n", opCount, token);
+                // Trim each token before storing.
+                trim_whitespace(macroToken);
+                strncpy(line_entry.operands[opCount], macroToken, sizeof(line_entry.operands[opCount]) - 1);
+                printf("DEBUG: Macro Operand[%d]: '%s'\n", opCount, line_entry.operands[opCount]);
                 opCount++;
             }
             line_entry.operand_count = opCount;
+            free(macroLine);
+
             expand_macro(&line_entry, lines, &address);
         }
+
         else
         {
             strcpy(line_entry.opcode, token);
