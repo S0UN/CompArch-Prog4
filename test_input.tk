@@ -5,6 +5,7 @@
     halt
     call :func
     return
+
 .data
 :func
-    out r4
+    9
