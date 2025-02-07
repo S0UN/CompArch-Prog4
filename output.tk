@@ -1,21 +1,16 @@
+.code
+	xor r2, r2, r2
+	addi r2, 0
+	shftli r2, 12
+	addi r2, 0
+	shftli r2, 12
+	addi r2, 0
+	shftli r2, 12
+	addi r2, 0
+	shftli r2, 12
+	addi r2, 256
+	shftli r2, 4
+	addi r2, 8
+	add r3, r4, r5
 .data
-	321
-	213
-	5321
-	436
-	34
-	4124
-	1
-.data
-	321
-	4
-	21
-	523
-	5
-	2
-	3
-.data
-	213
-	32
-	52
-	3
+	4132
