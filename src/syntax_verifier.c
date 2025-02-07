@@ -713,7 +713,6 @@ void resolve_labels(ArrayList *instructions, LabelTable *labels)
     for (int i = 0; i < instructions->size; i++)
     {
         Line *line = &instructions->lines[i];
-        // Resolve the label field if it begins with ':'
         if (line->label[0] == ':')
         {
             char lbl[20];
@@ -722,21 +721,8 @@ void resolve_labels(ArrayList *instructions, LabelTable *labels)
             if (addr != -1)
                 snprintf(line->label, sizeof(line->label), "0x%X", addr);
         }
-        // Also, for each operand that starts with ':'
-        for (int j = 0; j < line->operand_count; j++)
-        {
-            if (line->operands[j][0] == ':')
-            {
-                char lbl[20];
-                strcpy(lbl, line->operands[j] + 1);
-                int addr = get_label_address(labels, lbl);
-                if (addr != -1)
-                    snprintf(line->operands[j], sizeof(line->operands[j]), "0x%X", addr);
-            }
-        }
     }
 }
-
 
 /* -------------------- process_file() -------------------- */
 int process_file(const char *input_filename, ArrayList *lines, LabelTable **labels)
@@ -776,31 +762,25 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
 
         // If the line is a label (starts with ':')
         if (buffer[0] == ':')
-        {
-            if (!validate_label_format(buffer))
-            {
-                fprintf(stderr, "Syntax Error: Invalid label format: %s\n", buffer);
-                fclose(fp);
-                return 1;
-            }
-            // Store the label in the label table.
-            store_label(labels, buffer + 1, address, in_code_section);
+{
+    if (!validate_label_format(buffer))
+    {
+        fprintf(stderr, "Syntax Error: Invalid label format: %s\n", buffer);
+        fclose(fp);
+        return 1;
+    }
+    // Trim the label first.
+    char tempLabel[50];
+    strncpy(tempLabel, buffer, sizeof(tempLabel) - 1);
+    tempLabel[sizeof(tempLabel) - 1] = '\0';
+    trim_whitespace(tempLabel);
 
-            // Also add a label line to the ArrayList.
-            Line label_line;
-            memset(&label_line, 0, sizeof(Line));
-            label_line.program_counter = address;
-            // For our purposes, we'll set the size to 0 so that labels do not consume machine code space.
-            label_line.size = 0;
-            // Mark type as 'L' for label.
-            label_line.type = 'L';
-            // Store the label text (as read, e.g., ":function")
-            strcpy(label_line.opcode, buffer);
-            label_line.operand_count = 0;
-            add_to_arraylist(lines, label_line);
-            // Do not increment address for a label definition.
-            continue;
-        }
+    // Store the label in the label table, but DO NOT add a label line to the ArrayList.
+    store_label(labels, tempLabel + 1, address, in_code_section);
+    // Do not add this label line to the final output.
+    continue;
+}
+
 
         // For data section, if the line consists solely of a number, treat it as a data literal.
         char *firstToken = strtok(buffer, " \t");
@@ -934,6 +914,7 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
 }
 
 
+/* -------------------- write_output_file() -------------------- */
 void write_output_file(const char *output_filename, ArrayList *instructions)
 {
     FILE *fp = fopen(output_filename, "w");
@@ -953,23 +934,10 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
                 fprintf(fp, ".code\n");
             else if (line->type == 'D')
                 fprintf(fp, ".data\n");
-            else if (line->type == 'L')
-                fprintf(fp, ".data\n");  // If labels in data are expected.
             current_section = line->type;
         }
         fprintf(fp, "\t");
-
-        if (line->type == 'D' && line->opcode[0] == '\0')
-        {
-            // Data literal
-            fprintf(fp, "%d", line->literal);
-        }
-        else if (line->type == 'L')
-        {
-            // Label definition: print the label (which now includes its resolved address).
-            fprintf(fp, "%s", line->opcode);
-        }
-        else if ((strcasecmp(line->opcode, "addi") == 0 || strcasecmp(line->opcode, "subi") == 0) && line->operand_count == 2)
+        if ((strcasecmp(line->opcode, "addi") == 0 || strcasecmp(line->opcode, "subi") == 0) && line->operand_count == 2)
         {
             fprintf(fp, "%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
         }

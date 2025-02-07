@@ -1,2 +1,4 @@
 .code
-	priv r0, r0, r0, 0x0
+	add r1, r2, r3
+	br 0x1008
+	xor r4, r4, r4

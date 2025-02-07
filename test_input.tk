@@ -1,2 +1,5 @@
 .code
-    halt r1
+    add r1, r2, r3      ; PC 0x1000
+    br :loop            ; PC 0x1004; should resolve to the label's address
+:loop
+    xor r4, r4, r4      ; PC 0x1008
