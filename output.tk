@@ -1,14 +1,4 @@
 .code
-	add r1, r2, r3
-	xor r4, r4, r4
-	xor r5, r5, r5
-	subi , 
-	st r6, r30, 0
-	ld r7, r30, 0
+	xor r0, r0, r0
 	addi , 
-	call :function
-	return
-	st r8, 0xFFFFF000, 0
-	st r9, 0xFFFFF000, 8
-.data
-	9
+	br r5

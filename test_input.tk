@@ -1,18 +1,10 @@
-; This is a comment and should be ignored
-
 .code
-    add r1, r2, r3      ; Valid instruction
-    xor r4, r4, r4      ; Valid instruction
-    clr r5              ; Macro: should expand to xor r5, r5, r5
-    push r6             ; Macro: should expand to subi + st
-    pop r7              ; Macro: should expand to ld + addi
-    halt                ; Macro: should expand to trap 0x0
-    call :function      ; Macro: should expand to subi + st + br
-    return              ; Macro: should expand to ld + addi + br
-
-.data
-:function
-    out r8, r9         ; Macro: should expand to st r8, 0xFFFFF000 + st r9, 0xFFFFF000
-    :variable          ; A label in .data
-    9                  ; A data item (64-bit)
-
+    clr r0
+; the above line is a macro, it sets the value of register r0 to 0!
+    ld r5, :L1
+    br r5
+; the above two instructions are for illustration only
+.code
+:L1
+    halt
+; the above line is also a macro!
