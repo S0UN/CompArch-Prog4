@@ -222,9 +222,12 @@ bool validate_macro_instruction(const char *line)
             error("Memory allocation failed in macro validation");
         trim_whitespace(trimmed);
         // Only store nonempty tokens.
-        if (strlen(trimmed) > 0) {
+        if (strlen(trimmed) > 0)
+        {
             operands[operandCount++] = trimmed;
-        } else {
+        }
+        else
+        {
             free(trimmed);
         }
         token = strtok(NULL, " \t,");
@@ -290,14 +293,16 @@ bool validate_macro_instruction(const char *line)
     }
     else
     {
-        for (int i = 0; i < operandCount; i++) {
+        for (int i = 0; i < operandCount; i++)
+        {
             free(operands[i]);
         }
         error("Unknown macro instruction");
     }
 
     // Free any allocated tokens.
-    for (int i = 0; i < operandCount; i++) {
+    for (int i = 0; i < operandCount; i++)
+    {
         free(operands[i]);
     }
 
@@ -421,22 +426,45 @@ bool validate_instruction(const char *line)
     }
     else if (strcasecmp(opcode, "mov") == 0)
     {
-        if (operandCount == 2)
+        int r0, r1, L;
+        char extra[100] = {0}; // Buffer to check for extra tokens.
+        // Assume that after "mov " (4 characters) the operands start.
+        const char *tkn = line + 4;
+
+        // Try pattern 1: "r%d, (r%d)(%d)" i.e. register-to-memory form.
+        if (sscanf(tkn, "r%d, (r%d)(%d)", &r0, &r1, &L) == 3)
         {
-            if (isValidRegister(operands[0]) && isValidRegister(operands[1]))
-                return true;
-            if (isValidRegister(operands[0]) && isValidImmediate(operands[1], true, 12))
-                return true;
+            if (sscanf(tkn, "r%d, (r%d)(%d) %s", &r0, &r1, &L, extra) == 4)
+                error("Invalid Tinker Instruction for mov!");
+            return true;
         }
-        else if (operandCount == 3)
+        // Try pattern 2: "r%d, r%d" i.e. register-to-register form.
+        else if (sscanf(tkn, "r%d, r%d", &r0, &r1) == 2)
         {
-            if (isMemoryOperand(operands[0]) && isValidRegister(operands[1]))
-                return true;
-            if (isMemoryOperand(operands[1]) && isValidRegister(operands[0]))
-                return true;
+            if (sscanf(tkn, "r%d, r%d %s", &r0, &r1, extra) == 3)
+                error("Invalid Tinker Instruction for mov!");
+            return true;
         }
-        error("mov: Invalid operands. Must be one of: (rd, rs) or (rd, imm) or memory forms.");
+        // Try pattern 3: "r%d, %u" i.e. register-to-immediate form.
+        else if (sscanf(tkn, "r%d, %u", &r0, &L) == 2)
+        {
+            if (sscanf(tkn, "r%d, %d %s", &r0, &r1, extra) == 3)
+                error("Invalid Tinker Instruction for mov!");
+            return true;
+        }
+        // Try pattern 4: "(r%d)(%u), r%d" i.e. memory-to-register form.
+        else if (sscanf(tkn, "(r%d)(%u), r%d", &r0, &L, &r1) == 3)
+        {
+            if (sscanf(tkn, "(r%d)(%u), r%d %s", &r0, &L, &r1, extra) == 4)
+                error("Invalid Tinker Instruction for mov!");
+            return true;
+        }
+        else
+        {
+            error("mov: Invalid operands. Must be one of: (rd, rs) or (rd, imm) or memory forms.");
+        }
     }
+
     else if (strcasecmp(opcode, "brgt") == 0)
     {
         if (operandCount != 3)
@@ -754,8 +782,8 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
         printf("\nDEBUG: Tokenized Instruction -> %s\n", token);
 
         if (validate_macro(token))
-        {   
-           // validate_macro_instruction(original_buffer);
+        {
+            // validate_macro_instruction(original_buffer);
 
             strcpy(line_entry.opcode, token);
             int opCount = 0;
