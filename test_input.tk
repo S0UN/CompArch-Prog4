@@ -1,9 +1,7 @@
 .code
-    add r1, r1, r1   ; Initialize r1 to 0
-    addi r1, r1, 5   ; r1 = r1 + 5
-    add r2, r1, r1   ; r2 = r1 + r1 (r2 = 10)
-    add r3, r1, r2   ; r3 = r1 + r2 (r3 = 15)
-    add r4, r3, r3   ; r4 = r3 + r3 (r4 = 30)
-    addi r5, r4, 2   ; r5 = r4 + 2 (r5 = 32)
-    add r6, r5, r1   ; r6 = r5 + r1 (r6 = 37)
-    br r6            ; Branch to address stored in r6 (for demonstration)
+    mov r1, 5      ; Load nonzero value
+    br :skip ; Should not branch since r2 = 0
+    add r3, r3, r3  ; This executes
+
+:skip
+    add r4, r4, r4  ; Execution reaches here normally

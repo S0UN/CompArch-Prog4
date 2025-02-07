@@ -366,6 +366,11 @@ bool validate_instruction(const char *line)
    - in rd    → priv rd, r?, r0, 0x3   (assumes a second register operand is provided)
    - halt     → trap 0
 */
+void error(const char *message)
+{
+    fprintf(stderr, "Error: %s\n", message);
+    exit(1);
+}
 void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
 {
     Line new_entry;
