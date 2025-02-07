@@ -1,0 +1,9 @@
+.code
+	xor r1
+	subi r2
+	st r2
+	ld r3
+	addi r3
+	trap
+	call 0x1020
+	return

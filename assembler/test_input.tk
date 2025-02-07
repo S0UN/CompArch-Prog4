@@ -1,0 +1,10 @@
+.code
+    clr r1
+    push r2
+    pop r3
+    halt
+    call :func
+    return
+.data
+:func
+    out r4
