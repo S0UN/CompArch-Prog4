@@ -879,23 +879,6 @@ void resolve_labels(ArrayList *instructions, LabelTable *labels)
         }
     }
 }
-/*************  ✨ Codeium Command ⭐  *************/
-/**
- * process_file_first_pass: Process the first pass of the input file.
- *
- * The first pass involves:
- *  1. Reading the input file and ignoring comments and empty lines.
- *  2. Detecting section changes (.code and .data).
- *  3. Validating and storing the labels with their addresses in the label table.
- *  4. Incrementing the program counter for instructions and data.
- *
- * @param input_filename: The name of the input file.
- * @param labels: The label table to store the labels.
- * @param address: The current program counter.
- *
- * @return 0 if successful, 1 otherwise.
- */
-/******  7071261a-55d1-4114-a48a-e886ff48642d  *******/
 int process_file_first_pass(const char *input_filename, LabelTable **labels, int *address) {
     FILE *fp = fopen(input_filename, "r");
     if (!fp) {
@@ -1107,6 +1090,8 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
     for (int i = 0; i < instructions->size; i++)
     {
         Line *line = &instructions->lines[i];
+
+        // Check for section change and print the directive without indentation
         if (line->type != current_section)
         {
             if (line->type == 'I')
@@ -1115,7 +1100,11 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
                 fprintf(fp, ".data\n");
             current_section = line->type;
         }
+
+        // Indent instructions with a tab
         fprintf(fp, "\t");
+
+        // Formatting based on instruction type
         if ((strcasecmp(line->opcode, "addi") == 0 || strcasecmp(line->opcode, "subi") == 0) && line->operand_count == 2)
         {
             fprintf(fp, "%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
@@ -1134,7 +1123,10 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
         }
         else if (strcasecmp(line->opcode, "st") == 0 || strcasecmp(line->opcode, "ld") == 0)
         {
-            fprintf(fp, "%s %s, %s, %s", line->opcode, line->operands[0], line->operands[1], line->operands[2]);
+            fprintf(fp, "%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
+
+            if (line->operand_count == 3)
+                fprintf(fp, ", %s", line->operands[2]); // Print third operand if present
         }
         else if (strcasecmp(line->opcode, "trap") == 0)
         {
@@ -1153,6 +1145,7 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
         }
         else
         {
+            // General instruction format
             fprintf(fp, "%s", line->opcode);
             for (int j = 0; j < line->operand_count; j++)
             {
@@ -1162,9 +1155,11 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
                     fprintf(fp, ", %s", line->operands[j]);
             }
         }
-        /* Only add newline if this is not the last instruction */
-        if (i != instructions->size - 1)
-            fprintf(fp, "\n");
+
+        // Add a newline after each instruction
+        fprintf(fp, "\n");
     }
+
     fclose(fp);
 }
+
