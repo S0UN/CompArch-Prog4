@@ -64,7 +64,12 @@ bool isValidImmediate(const char *imm, bool allow_negative, int bit_size)
             min_val = 0;
             max_val = 4095; // Unsigned 12-bit
         }
-    } else {
+    } 
+    else if (bit_size == 5) {  // 🔥 Add case for 5-bit immediate range
+        min_val = 0;
+        max_val = 31;  // 5-bit unsigned values: 0-31
+    } 
+    else {
         return false; // Unsupported immediate size
     }
 
@@ -88,6 +93,7 @@ bool isValidImmediate(const char *imm, bool allow_negative, int bit_size)
 
     return (val >= min_val && val <= max_val);
 }
+
 
 
 bool isMemoryOperand(const char *operand)
@@ -266,11 +272,10 @@ int validate_spacing(char *line)
     }
     else if (strcasecmp(opcode, "call") == 0)
     {
-        if (operandCount != 3)
+        if (operandCount != 1)
             error("call requires three operands (r_d, r_s, r_t)");
 
-        if (!isValidRegister(operands[0]) || !isValidRegister(operands[1]) || !isValidRegister(operands[2]))
-            error("call: all three operands must be valid registers (r_d, r_s, r_t)");
+  
     }
     else if (strcasecmp(opcode, "return") == 0)
     {
@@ -297,7 +302,7 @@ int validate_spacing(char *line)
         if (!isValidRegister(operands[0]))
             error("Shift immediate: first operand must be a register");
 
-        if (!isValidImmediate(operands[1], false, 12)) // 🔥 Unsigned 5-bit immediate (for shift amount)
+        if (!isValidImmediate(operands[1], false, 5)) // 🔥 Unsigned 5-bit immediate (for shift amount)
             error("Shift immediate: second operand must be a 5-bit unsigned immediate");
     }
     else if (strcasecmp(opcode, "mov") == 0)
