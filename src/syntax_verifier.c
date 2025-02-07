@@ -1,4 +1,3 @@
-
 #include "syntax_verifier.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -49,6 +48,7 @@ int main(int argc, char *argv[]) {
 
 
 
+/* -------------------- Helper Functions -------------------- */
 void trim_whitespace(char *line)
 {
     int start = 0;
@@ -71,6 +71,7 @@ void remove_comments(char *line)
     trim_whitespace(line); // Ensure no trailing spaces remain
 }
 
+/* -------------------- Syntax Validation Helpers -------------------- */
 bool isValidRegister(const char *reg)
 {
     if (reg[0] != 'r' && reg[0] != 'R')
@@ -90,7 +91,7 @@ bool isValidImmediate(const char *imm, bool allow_negative, int bit_size)
     bool neg = false;
     if (*imm == '-')
     {
-        if (!allow_negative) // If negatives aren't allowed 
+        if (!allow_negative) // If negatives aren't allowed (e.g., in unsigned immediate fields)
             return false;
         neg = true;
         imm++;
@@ -173,6 +174,7 @@ bool isValidMemoryAddress(const char *str) {
     return true;
 }
 
+/* -------------------- New Helper Functions -------------------- */
 int validate_label_format(char *token)
 {
     if (token[0] != ':')
@@ -248,6 +250,7 @@ int validate_spacing(const char *line)
         return 1; // No opcode, treat as valid (should be caught elsewhere if needed)
     }
 
+    // For "halt" or "return", skip the check for a following space.
     if (!(strcasecmp(tokens[0], "halt") == 0 || strcasecmp(tokens[0], "return") == 0))
     {
         int opcode_len = strlen(tokens[0]);
@@ -261,6 +264,7 @@ int validate_spacing(const char *line)
         }
     }
 
+    // **Fix: Allow labels without trailing commas**
     for (int i = 1; i < token_count; i++)
     {
         int len = strlen(tokens[i]);
@@ -295,6 +299,7 @@ bool validate_macro_instruction(const char *line)
         error("Empty macro instruction");
 
     int operandCount = 0;
+    // We expect at most 2 operands for these macros (with a little extra space if needed)
     char *operands[3];
     char *token = strtok(NULL, " \t,");
     while (token != NULL && operandCount < 3)
@@ -396,6 +401,7 @@ bool validate_macro_instruction(const char *line)
     return true;
 }
 
+/* -------------------- validate_instruction() -------------------- */
 bool validate_instruction(const char *line)
 {
     char opcode[20];
@@ -507,7 +513,7 @@ bool validate_instruction(const char *line)
     else if (strcasecmp(opcode, "mov") == 0)
     {
         int r0, r1, L;
-        char extra[100] = {0}; 
+        char extra[100] = {0}; // Buffer to check for extra tokens.
         // Assume that after "mov " (4 characters) the operands start.
         const char *tkn = line + 4;
 
@@ -735,6 +741,8 @@ if (strcasecmp(line_entry->opcode, "ld") == 0) {
     expand_ld_instruction(line_entry, instruction_list, address, labels);
 }
 
+
+    // If the instruction is not a defined macro, do nothing.
 }
 void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *address, LabelTable *labels) {
     long long value;
@@ -840,6 +848,7 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
 }
 
 
+/* -------------------- resolve_labels() -------------------- */
 void resolve_labels(ArrayList *instructions, LabelTable *labels)
 {
     for (int i = 0; i < instructions->size; i++)
@@ -920,6 +929,7 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
     fclose(fp);
     return 0;
 }
+
 int process_file_second_pass(const char *input_filename, ArrayList *lines, LabelTable *labels, int *address) {
     FILE *fp = fopen(input_filename, "r");
     if (!fp) {
@@ -929,7 +939,7 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
 
     char buffer[256];
     char original_buffer[256]; // Save original line for validation
-    char last_section = '\0';  // Track last section type ('.' means none)
+    int in_code_section = 1;   // 1 = .code, 0 = .data
 
     while (fgets(buffer, sizeof(buffer), fp)) {
         validate_spacing(buffer);
@@ -940,30 +950,44 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
         if (strlen(buffer) == 0)
             continue;
 
-        // **Check if this is a section directive**
-        if (buffer[0] == '.') {
-            char section_type = (strcasecmp(buffer, ".code") == 0) ? 'I' : 'D';
-
-            // **Only add if the last line was NOT a section directive**
-            if (last_section != section_type) {
-                Line section_line;
-                memset(&section_line, 0, sizeof(Line));
-                strncpy(section_line.opcode, buffer, sizeof(section_line.opcode) - 1);
-                section_line.program_counter = *address;
-                section_line.type = section_type;
-                add_to_arraylist(lines, section_line);
-            }
-
-            last_section = section_type; // Update last seen section
-            continue; // Skip further processing
+        // Handle section directives.
+        if (strncmp(buffer, ".code", 5) == 0) {
+            in_code_section = 1;
+            continue;
         }
-        else {
-            // **If this is an instruction or data, reset last_section**
-            last_section = '\0';
+        if (strncmp(buffer, ".data", 5) == 0) {
+            in_code_section = 0;
+            continue;
         }
 
-        // **Proceed with normal instruction/data processing**
-        validate_spacing(buffer);
+        // If the line is a label (starts with ':'), skip it (already processed in the first pass).
+        if (buffer[0] == ':') {
+            continue;
+        }
+
+        // For data section, if the line consists solely of a number, treat it as a data literal.
+        char *firstToken = strtok(buffer, " \t");
+        if (!in_code_section && (isdigit(firstToken[0]) || firstToken[0] == '-')) {
+            Line data_line;
+            memset(&data_line, 0, sizeof(Line));
+            data_line.program_counter = *address;
+            data_line.size = 8; // Data items take 8 bytes.
+            data_line.type = 'D';
+            // Save the literal as an integer value.
+            data_line.literal = (int)atoll(firstToken);
+            // Store the literal as text in the opcode field (so we can print it).
+            snprintf(data_line.opcode, sizeof(data_line.opcode), "%d", data_line.literal);
+            data_line.operand_count = 0;
+            add_to_arraylist(lines, data_line);
+            *address += 8;
+            continue;
+        }
+
+        // Otherwise, process as an instruction.
+        // Restore the original buffer for tokenization/validation.
+        strcpy(buffer, original_buffer);
+        remove_comments(buffer);
+        trim_whitespace(buffer);
 
         char *token = strtok(buffer, " \t");
         if (!token) {
@@ -977,46 +1001,82 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
         Line line_entry;
         memset(&line_entry, 0, sizeof(Line));
         line_entry.program_counter = *address;
-        line_entry.size = 4;  // Assume instructions take 4 bytes
-        line_entry.type = 'I';
+        line_entry.size = in_code_section ? 4 : 8;
+        line_entry.type = in_code_section ? 'I' : 'D';
+        line_entry.from_call = 0;
 
-        // **Handle macros first**
-        if (validate_macro(token)) {
+        // Check if the instruction is a macro.
+        if (strcasecmp(token, "halt") == 0) {
+            // Special-case: halt takes no operands.
+            strcpy(line_entry.opcode, token);
+            line_entry.operand_count = 0;
+            char *validateCopy = strdup(original_buffer);
+            if (!validateCopy)
+                error("Memory allocation failed during macro validation");
+            validate_macro_instruction(validateCopy); // Should succeed.
+            free(validateCopy);
+            expand_macro(&line_entry, lines, address);
+        } else if (validate_macro(token)) {
+            // Validate macro using a duplicate.
             char *validateCopy = strdup(original_buffer);
             if (!validateCopy)
                 error("Memory allocation failed during macro validation");
             validate_macro_instruction(validateCopy);
             free(validateCopy);
 
-            // Expand macro
+            // Duplicate the original line for tokenization.
+            char *macroLine = strdup(original_buffer);
+            if (!macroLine)
+                error("Memory allocation failed during macro expansion tokenization");
+
+            char *macroToken = strtok(macroLine, " \t");
+            strcpy(line_entry.opcode, macroToken);
+            int opCount = 0;
+            while ((macroToken = strtok(NULL, " \t,")) != NULL && opCount < 4) {
+                trim_whitespace(macroToken);
+                if (strlen(macroToken) > 0) {
+                    strncpy(line_entry.operands[opCount], macroToken, sizeof(line_entry.operands[opCount]) - 1);
+                    printf("DEBUG: Macro Operand[%d]: '%s'\n", opCount, line_entry.operands[opCount]);
+                    opCount++;
+                }
+            }
+            line_entry.operand_count = opCount;
+            free(macroLine);
+
             expand_macro(&line_entry, lines, address);
-        }
-        else {
-            // **Regular instruction processing**
+        } else {
             strcpy(line_entry.opcode, token);
             int opCount = 0;
             while ((token = strtok(NULL, " \t,")) != NULL && opCount < 4) {
-                strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
-                printf("DEBUG: Operand[%d]: %s\n", opCount, line_entry.operands[opCount]);
+                if (isMemoryOperand(token)) {
+                    strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
+                } else if (token[0] == 'r' && isValidRegister(token)) {
+                    strncpy(line_entry.registers[opCount], token, sizeof(line_entry.registers[opCount]) - 1);
+                    strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
+                } else if (isdigit(token[0]) || token[0] == '-') {
+                    line_entry.literal = atoi(token);
+                    strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
+                } else if (token[0] == ':') {
+                    strncpy(line_entry.label, token, sizeof(line_entry.label) - 1);
+                    strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
+                } else {
+                    strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
+                }
+                printf("DEBUG: Operand[%d]: %s\n", opCount, token);
                 opCount++;
             }
             line_entry.operand_count = opCount;
-
-            // Validate instruction
-            if (!validate_instruction(original_buffer)) {
-                fprintf(stderr, "Invalid instruction: %s\n", original_buffer);
-                fclose(fp);
-                return 1;
-            }
-
+            remove_comments(original_buffer);
+            validate_instruction(original_buffer);
             add_to_arraylist(lines, line_entry);
-            *address += 4;
+            *address += in_code_section ? 4 : 8;
         }
     }
 
     fclose(fp);
     return 0;
 }
+/* -------------------- write_output_file() -------------------- */
 void write_output_file(const char *output_filename, ArrayList *instructions)
 {
     FILE *fp = fopen(output_filename, "w");
@@ -1031,17 +1091,20 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
     {
         Line *line = &instructions->lines[i];
 
-        // Ensure section directives (.code/.data) are not indented
-        if (strcasecmp(line->opcode, ".code") == 0 || strcasecmp(line->opcode, ".data") == 0)
+        // Check for section change and print the directive without indentation
+        if (line->type != current_section)
         {
-            fprintf(fp, "%s\n", line->opcode);
-            current_section = line->opcode[1]; // Track current section type
-            continue;
+            if (line->type == 'I')
+                fprintf(fp, ".code\n");
+            else if (line->type == 'D')
+                fprintf(fp, ".data\n");
+            current_section = line->type;
         }
 
-        // Indent instructions but not section directives
+        // Indent instructions with a tab
         fprintf(fp, "\t");
 
+        // Formatting based on instruction type
         if ((strcasecmp(line->opcode, "addi") == 0 || strcasecmp(line->opcode, "subi") == 0) && line->operand_count == 2)
         {
             fprintf(fp, "%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
@@ -1060,7 +1123,10 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
         }
         else if (strcasecmp(line->opcode, "st") == 0 || strcasecmp(line->opcode, "ld") == 0)
         {
-            fprintf(fp, "%s %s, %s, %s", line->opcode, line->operands[0], line->operands[1], line->operands[2]);
+            fprintf(fp, "%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
+
+            if (line->operand_count == 3)
+                fprintf(fp, ", %s", line->operands[2]); // Print third operand if present
         }
         else if (strcasecmp(line->opcode, "trap") == 0)
         {
@@ -1079,6 +1145,7 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
         }
         else
         {
+            // General instruction format
             fprintf(fp, "%s", line->opcode);
             for (int j = 0; j < line->operand_count; j++)
             {
@@ -1088,7 +1155,10 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
                     fprintf(fp, ", %s", line->operands[j]);
             }
         }
-        fprintf(fp, "\n"); // Ensure newline after each instruction
+
+        // Add a newline after each instruction
+        fprintf(fp, "\n");
     }
+
     fclose(fp);
 }
