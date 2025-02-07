@@ -1,4 +1,8 @@
 .code
 	add r1, r2, r3
 	br 0x1008
-	xor r4, r4, r4
+	sub r4, r5, r6
+	call 0x1014
+	return
+.data
+	42

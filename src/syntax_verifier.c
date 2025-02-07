@@ -713,16 +713,32 @@ void resolve_labels(ArrayList *instructions, LabelTable *labels)
     for (int i = 0; i < instructions->size; i++)
     {
         Line *line = &instructions->lines[i];
+        // Resolve the dedicated label field, if it starts with a colon.
         if (line->label[0] == ':')
         {
             char lbl[20];
-            strcpy(lbl, line->label + 1);
+            strcpy(lbl, line->label + 1);  // Remove the colon.
+            trim_whitespace(lbl);
             int addr = get_label_address(labels, lbl);
             if (addr != -1)
                 snprintf(line->label, sizeof(line->label), "0x%X", addr);
         }
+        // Also resolve any operand that begins with a colon.
+        for (int j = 0; j < line->operand_count; j++)
+        {
+            if (line->operands[j][0] == ':')
+            {
+                char lbl[20];
+                strcpy(lbl, line->operands[j] + 1); // Skip the colon.
+                trim_whitespace(lbl);
+                int addr = get_label_address(labels, lbl);
+                if (addr != -1)
+                    snprintf(line->operands[j], sizeof(line->operands[j]), "0x%X", addr);
+            }
+        }
     }
 }
+
 
 /* -------------------- process_file() -------------------- */
 int process_file(const char *input_filename, ArrayList *lines, LabelTable **labels)
