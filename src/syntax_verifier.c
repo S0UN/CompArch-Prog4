@@ -170,7 +170,8 @@ int validate_spacing(char *line)
     return 1;
 }
 
-/* -------------------- validate_instruction() -------------------- */bool validate_instruction(const char *line)
+/* -------------------- validate_instruction() -------------------- */
+bool validate_instruction(const char *line)
 {
     char opcode[20];
     char *operands[4];
@@ -330,8 +331,8 @@ int validate_spacing(char *line)
     return true;
 }
 
-
-/* -------------------- expand_macro() -------------------- */void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
+/* -------------------- expand_macro() -------------------- */
+void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
 {
     Line new_entry;
     memset(&new_entry, 0, sizeof(Line));
@@ -341,9 +342,9 @@ int validate_spacing(char *line)
     {
         // clr rd -> xor rd, rd, rd
         strcpy(new_entry.opcode, "xor");
-        strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0]) - 1);
-        strncpy(new_entry.registers[1], line_entry->operands[0], sizeof(new_entry.registers[1]) - 1);
-        strncpy(new_entry.registers[2], line_entry->operands[0], sizeof(new_entry.registers[2]) - 1);
+        strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+        strncpy(new_entry.operands[1], line_entry->operands[0], sizeof(new_entry.operands[1]) - 1);
+        strncpy(new_entry.operands[2], line_entry->operands[0], sizeof(new_entry.operands[2]) - 1);
         new_entry.operand_count = 3;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
@@ -354,11 +355,11 @@ int validate_spacing(char *line)
     {
         // halt -> priv r0, r0, r0, 0x0
         strcpy(new_entry.opcode, "priv");
-        strcpy(new_entry.registers[0], "r0");
-        strcpy(new_entry.registers[1], "r0");
-        strcpy(new_entry.registers[2], "r0");
-        new_entry.literal = 0x0;
-        new_entry.operand_count = 1;
+        strcpy(new_entry.operands[0], "r0");
+        strcpy(new_entry.operands[1], "r0");
+        strcpy(new_entry.operands[2], "r0");
+        new_entry.literal = 0x0; // Immediate value
+        new_entry.operand_count = 4;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
         (*address) += 4;
@@ -368,8 +369,8 @@ int validate_spacing(char *line)
     {
         // push rd -> mov (r31)(-8), rd → subi r31, 8
         strcpy(new_entry.opcode, "mov");
-        strcpy(new_entry.registers[0], "(r31)(-8)");
-        strncpy(new_entry.registers[1], line_entry->operands[0], sizeof(new_entry.registers[1]) - 1);
+        strcpy(new_entry.operands[0], "(r31)(-8)");
+        strncpy(new_entry.operands[1], line_entry->operands[0], sizeof(new_entry.operands[1]) - 1);
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
@@ -378,8 +379,8 @@ int validate_spacing(char *line)
         memset(&new_entry, 0, sizeof(Line));
         new_entry.type = 'I';
         strcpy(new_entry.opcode, "subi");
-        strcpy(new_entry.registers[0], "r31");
-        strcpy(new_entry.registers[1], "r31");
+        strcpy(new_entry.operands[0], "r31");
+        strcpy(new_entry.operands[1], "r31");
         new_entry.literal = 8;
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
@@ -391,8 +392,8 @@ int validate_spacing(char *line)
     {
         // pop rd -> mov rd, (r31)(0) → addi r31, 8
         strcpy(new_entry.opcode, "mov");
-        strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0]) - 1);
-        strcpy(new_entry.registers[1], "(r31)(0)");
+        strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+        strcpy(new_entry.operands[1], "(r31)(0)");
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
@@ -401,8 +402,8 @@ int validate_spacing(char *line)
         memset(&new_entry, 0, sizeof(Line));
         new_entry.type = 'I';
         strcpy(new_entry.opcode, "addi");
-        strcpy(new_entry.registers[0], "r31");
-        strcpy(new_entry.registers[1], "r31");
+        strcpy(new_entry.operands[0], "r31");
+        strcpy(new_entry.operands[1], "r31");
         new_entry.literal = 8;
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
@@ -414,9 +415,9 @@ int validate_spacing(char *line)
     {
         // out rs, rt -> priv rs, rt, r0, 0x4
         strcpy(new_entry.opcode, "priv");
-        strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0]) - 1);
-        strncpy(new_entry.registers[1], line_entry->operands[1], sizeof(new_entry.registers[1]) - 1);
-        strcpy(new_entry.registers[2], "r0");
+        strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+        strncpy(new_entry.operands[1], line_entry->operands[1], sizeof(new_entry.operands[1]) - 1);
+        strcpy(new_entry.operands[2], "r0");
         new_entry.literal = 0x4;
         new_entry.operand_count = 4;
         new_entry.program_counter = (*address);
@@ -428,9 +429,9 @@ int validate_spacing(char *line)
     {
         // in rs, rt -> priv rs, rt, r0, 0x3
         strcpy(new_entry.opcode, "priv");
-        strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0]) - 1);
-        strncpy(new_entry.registers[1], line_entry->operands[1], sizeof(new_entry.registers[1]) - 1);
-        strcpy(new_entry.registers[2], "r0");
+        strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+        strncpy(new_entry.operands[1], line_entry->operands[1], sizeof(new_entry.operands[1]) - 1);
+        strcpy(new_entry.operands[2], "r0");
         new_entry.literal = 0x3;
         new_entry.operand_count = 4;
         new_entry.program_counter = (*address);
@@ -445,9 +446,9 @@ int validate_spacing(char *line)
 
         // Clear rd first
         strcpy(new_entry.opcode, "xor");
-        strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0]) - 1);
-        strncpy(new_entry.registers[1], new_entry.registers[0], sizeof(new_entry.registers[1]) - 1);
-        strncpy(new_entry.registers[2], new_entry.registers[0], sizeof(new_entry.registers[2]) - 1);
+        strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+        strncpy(new_entry.operands[1], new_entry.operands[0], sizeof(new_entry.operands[1]) - 1);
+        strncpy(new_entry.operands[2], new_entry.operands[0], sizeof(new_entry.operands[2]) - 1);
         new_entry.operand_count = 3;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
@@ -459,7 +460,7 @@ int validate_spacing(char *line)
             memset(&new_entry, 0, sizeof(Line));
             new_entry.type = 'I';
             strcpy(new_entry.opcode, "shftli");
-            strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0]) - 1);
+            strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
             new_entry.literal = 12;
             new_entry.operand_count = 2;
             new_entry.program_counter = (*address);
@@ -469,7 +470,7 @@ int validate_spacing(char *line)
             memset(&new_entry, 0, sizeof(Line));
             new_entry.type = 'I';
             strcpy(new_entry.opcode, "addi");
-            strncpy(new_entry.registers[0], line_entry->operands[0], sizeof(new_entry.registers[0]) - 1);
+            strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
             new_entry.literal = (value >> shift) & 0xFFF;
             new_entry.operand_count = 2;
             new_entry.program_counter = (*address);
@@ -478,6 +479,7 @@ int validate_spacing(char *line)
         }
     }
 }
+
 
 void error(const char *message)
 {

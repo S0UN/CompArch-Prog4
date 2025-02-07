@@ -1,4 +1,2 @@
 .code
-	xor r0, r0, r0
-	br r5
-	trap 0
+	priv r0, r0, r0, 
