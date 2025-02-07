@@ -131,31 +131,58 @@ int validate_macro(char *token)
     }
     return 0;
 }
-
 int validate_spacing(char *line)
 {
-    trim_whitespace(line); // Remove leading and trailing whitespace
-    char *tokens[5];
-    int token_count = 0;
+    // Save a copy of the original line for error messages.
+    char original[256];
+    strncpy(original, line, sizeof(original));
+    original[sizeof(original) - 1] = '\0';
+
+    // If the line is a label (starts with ':') or a directive (.code or .data), skip spacing checks.
+    if (line[0] == ':' || line[0] == '.')
+        return 1;
+
+    // Check indentation before trimming:
+    // The line must start with a tab OR exactly four spaces.
+    if (!(line[0] == '\t' || (line[0] == ' ' && line[1] == ' ' && line[2] == ' ' && line[3] == ' ')))
+    {
+        fprintf(stderr, "Syntax Error: Instruction must be indented with a tab or exactly 4 spaces: %s\n", original);
+        return 0;
+    }
+
+    // Now trim the line (this removes the indentation for further internal spacing checks).
+    trim_whitespace(line);
+
+    // Duplicate the trimmed line for tokenization.
     char *copy = strdup(line);
     if (!copy)
     {
         perror("Memory allocation failed in validate_spacing");
         exit(1);
     }
+
+    char *tokens[5];
+    int token_count = 0;
     char *token = strtok(copy, " ");
     while (token && token_count < 5)
     {
         tokens[token_count++] = token;
         token = strtok(NULL, " ");
     }
-    int opcode_len = strlen(tokens[0]);
-    if (line[opcode_len] != ' ')
+
+    // If the opcode is "halt" or "return", then we skip the check for a space following the opcode.
+    if (!(strcasecmp(tokens[0], "halt") == 0 || strcasecmp(tokens[0], "return") == 0))
     {
-        free(copy);
-        fprintf(stderr, "Syntax Error: Opcode must be followed by exactly one space: %s\n", line);
-        return 0;
+        int opcode_len = strlen(tokens[0]);
+        if (line[opcode_len] != ' ')
+        {
+            free(copy);
+            fprintf(stderr, "Syntax Error: Opcode must be followed by exactly one space: %s\n", line);
+            return 0;
+        }
     }
+
+    // Check that each operand (except the last token) ends with a comma.
     for (int i = 1; i < token_count - 1; i++)
     {
         int len = strlen(tokens[i]);
@@ -166,8 +193,98 @@ int validate_spacing(char *line)
             return 0;
         }
     }
+
     free(copy);
     return 1;
+}
+
+bool validate_macro_instruction(const char *line)
+{
+    // Make a temporary copy since strtok modifies the string.
+    char buf[300];
+    strncpy(buf, line, sizeof(buf));
+    buf[sizeof(buf) - 1] = '\0';
+    trim_whitespace(buf); // Ensure no extra whitespace
+
+    // Tokenize the line.
+    char *opcode = strtok(buf, " \t");
+    if (!opcode)
+    {
+        error("Empty macro instruction");
+    }
+
+    int operandCount = 0;
+    char *operands[3]; // Maximum of 2 operands expected for these macros.
+    char *token = strtok(NULL, " \t,");
+    while (token != NULL && operandCount < 3)
+    {
+        operands[operandCount++] = token;
+        token = strtok(NULL, " \t,");
+    }
+
+    // Now, validate based on the macro opcode.
+    if (strcasecmp(opcode, "in") == 0)
+    {
+        // Expected syntax: in rd, rs
+        if (operandCount != 2)
+            error("Macro 'in' requires exactly two operands (rd, rs)");
+        if (!isValidRegister(operands[0]) || !isValidRegister(operands[1]))
+            error("Macro 'in': both operands must be valid registers");
+        return true;
+    }
+    else if (strcasecmp(opcode, "out") == 0)
+    {
+        // Expected syntax: out rd, rs
+        if (operandCount != 2)
+            error("Macro 'out' requires exactly two operands (rd, rs)");
+        if (!isValidRegister(operands[0]) || !isValidRegister(operands[1]))
+            error("Macro 'out': both operands must be valid registers");
+        return true;
+    }
+    else if (strcasecmp(opcode, "clr") == 0)
+    {
+        // Expected syntax: clr rd
+        if (operandCount != 1)
+            error("Macro 'clr' requires exactly one operand (rd)");
+        if (!isValidRegister(operands[0]))
+            error("Macro 'clr': operand must be a valid register");
+        return true;
+    }
+    else if (strcasecmp(opcode, "ld") == 0)
+    {
+        // Expected syntax: ld rd, L
+        if (operandCount != 2)
+            error("Macro 'ld' requires exactly two operands (rd, literal)");
+        if (!isValidRegister(operands[0]))
+            error("Macro 'ld': first operand must be a valid register");
+        // For the literal, do a simple check: first character should be a digit or '-' followed by a digit.
+        if (!(isdigit(operands[1][0]) || (operands[1][0] == '-' && isdigit(operands[1][1]))))
+            error("Macro 'ld': second operand must be a literal number");
+        return true;
+    }
+    else if (strcasecmp(opcode, "push") == 0)
+    {
+        // Expected syntax: push rd
+        if (operandCount != 1)
+            error("Macro 'push' requires exactly one operand (rd)");
+        if (!isValidRegister(operands[0]))
+            error("Macro 'push': operand must be a valid register");
+        return true;
+    }
+    else if (strcasecmp(opcode, "pop") == 0)
+    {
+        // Expected syntax: pop rd
+        if (operandCount != 1)
+            error("Macro 'pop' requires exactly one operand (rd)");
+        if (!isValidRegister(operands[0]))
+            error("Macro 'pop': operand must be a valid register");
+        return true;
+    }
+    else
+    {
+        error("Unknown macro instruction");
+    }
+    return false; // Should never be reached.
 }
 
 /* -------------------- validate_instruction() -------------------- */
@@ -621,6 +738,8 @@ int process_file(const char *input_filename, ArrayList *lines, LabelTable **labe
 
         if (validate_macro(token))
         {
+            validate_macro_instruction(original_buffer);
+
             strcpy(line_entry.opcode, token);
             int opCount = 0;
             while ((token = strtok(NULL, " \t,")) != NULL && opCount < 4)
