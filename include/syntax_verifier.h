@@ -26,6 +26,7 @@ bool validate_macro_instruction(const char *line);
 bool isMemoryOperand(const char* operand);
 void error(const char *message);
 bool isValidLabel(const char *str) ;
+int validate_macro(char *token);
 bool isValidMemoryAddress(const char *str);
 
 

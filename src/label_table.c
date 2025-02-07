@@ -21,6 +21,10 @@ void store_label(LabelTable **labels, const char *label, int address, int in_cod
     HASH_ADD_STR(*labels, label, entry);
 }
 
+// Function to initialize and return an empty label table
+LabelTable *create_label_table() {
+    return NULL;  // Since we're using uthash, the table starts as NULL
+}
 int get_label_address(LabelTable *labels, const char *label) {
     LabelTable *entry;
     HASH_FIND_STR(labels, label, entry);
