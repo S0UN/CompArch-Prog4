@@ -9,9 +9,11 @@
 #include "line.h"
 #define MAX_OPERAND_LENGTH 32
 
-LabelTable *labels = NULL; 
-int main(int argc, char *argv[]) {
-    if (argc != 3) {
+LabelTable *labels = NULL;
+int main(int argc, char *argv[])
+{
+    if (argc != 3)
+    {
         printf("Usage: %s <input_file> <output_file>\n", argv[0]);
         return 1;
     }
@@ -21,7 +23,8 @@ int main(int argc, char *argv[]) {
     int address = 0x1000; // PC starts at 0x1000
 
     // First pass: Collect labels.
-    if (process_file_first_pass(argv[1], &labels, &address) != 0) {
+    if (process_file_first_pass(argv[1], &labels, &address) != 0)
+    {
         printf("Error processing file during first pass.\n");
         free_arraylist(&instructions);
         free_label_table(labels);
@@ -29,7 +32,8 @@ int main(int argc, char *argv[]) {
     }
 
     // Second pass: Expand macros and collect instructions.
-    if (process_file_second_pass(argv[1], &instructions, labels, &address) != 0) {
+    if (process_file_second_pass(argv[1], &instructions, labels, &address) != 0)
+    {
         printf("Error processing file during second pass.\n");
         free_arraylist(&instructions);
         free_label_table(labels);
@@ -48,8 +52,6 @@ int main(int argc, char *argv[]) {
 
     return 0;
 }
-
-
 
 void trim_whitespace(char *line)
 {
@@ -92,7 +94,7 @@ bool isValidImmediate(const char *imm, bool allow_negative, int bit_size)
     bool neg = false;
     if (*imm == '-')
     {
-        if (!allow_negative) 
+        if (!allow_negative)
             return false;
         neg = true;
         imm++;
@@ -149,26 +151,33 @@ bool isMemoryOperand(const char *operand)
 bool isLabelSyntax(const char *operand)
 {
     return operand[0] == ':';
-
 }
 
-bool isValidLabel(const char *str) {
-    if (str == NULL || !isalpha(str[0]) && str[0] != '_') {
+bool isValidLabel(const char *str)
+{
+    if (str == NULL || !isalpha(str[0]) && str[0] != '_')
+    {
         return false;
     }
-    for (int i = 1; str[i] != '\0'; i++) {
-        if (!isalnum(str[i]) && str[i] != '_') {
+    for (int i = 1; str[i] != '\0'; i++)
+    {
+        if (!isalnum(str[i]) && str[i] != '_')
+        {
             return false;
         }
     }
     return true;
 }
-bool isValidMemoryAddress(const char *str) {
-    if (str == NULL || str[0] != '0' || (str[1] != 'x' && str[1] != 'X')) {
+bool isValidMemoryAddress(const char *str)
+{
+    if (str == NULL || str[0] != '0' || (str[1] != 'x' && str[1] != 'X'))
+    {
         return false;
     }
-    for (int i = 2; str[i] != '\0'; i++) {
-        if (!isxdigit(str[i])) {
+    for (int i = 2; str[i] != '\0'; i++)
+    {
+        if (!isxdigit(str[i]))
+        {
             return false;
         }
     }
@@ -198,7 +207,6 @@ int validate_macro(char *token)
     return 0;
 }
 
-
 int validate_spacing(const char *line)
 {
     // Make a duplicate of the input line so we don't modify the caller's copy.
@@ -222,7 +230,7 @@ int validate_spacing(const char *line)
     // Tokenize to get the opcode
     char *opcode = strtok(lineCopy, " \t");
     if (!opcode)
-        return 1; 
+        return 1;
 
     // Handle the special cases where "halt" and "return" don't require a space afterward
     if (strcasecmp(opcode, "halt") == 0 || strcasecmp(opcode, "return") == 0)
@@ -273,7 +281,6 @@ int validate_spacing(const char *line)
 
     return 1;
 }
-
 
 bool validate_macro_instruction(const char *line)
 {
@@ -336,12 +343,15 @@ bool validate_macro_instruction(const char *line)
         if (!isValidRegister(operands[0]))
             error("Macro 'clr': operand must be a valid register");
     }
-  else if (strcasecmp(opcode, "ld") == 0) {
+    else if (strcasecmp(opcode, "ld") == 0)
+    {
         // Expected syntax: ld rd, L
-        if (operandCount != 2) {
+        if (operandCount != 2)
+        {
             error("Macro 'ld' requires exactly two operands (rd, literal/memory address/label)");
         }
-        if (!isValidRegister(operands[0])) {
+        if (!isValidRegister(operands[0]))
+        {
             error("Macro 'ld': first operand must be a valid register");
         }
         /*
@@ -489,10 +499,10 @@ bool validate_instruction(const char *line)
         if (operandCount != 1)
             error("call requires one operand (a 12-bit signed immediate or label)");
 
-            /*
-        if (!isValidImmediate(operands[0], true, 12) && !isLabelSyntax(operands[0]))
-            error("call: operand must be a 12-bit signed immediate or a label");
-            */
+        /*
+    if (!isValidImmediate(operands[0], true, 12) && !isLabelSyntax(operands[0]))
+        error("call: operand must be a 12-bit signed immediate or a label");
+        */
     }
     else if (strcasecmp(opcode, "return") == 0)
     {
@@ -588,23 +598,14 @@ bool validate_instruction(const char *line)
             error("Shift immediate instructions require two operands (rd, imm)");
         if (!isValidRegister(operands[0]))
             error("Shift immediate: first operand must be a register");
-            /*
-        if (!isValidImmediate(operands[1], true, 5))
-            error("Shift immediate: second operand must be a 5-bit unsigned immediate");
-            */
+        /*
+    if (!isValidImmediate(operands[1], true, 5))
+        error("Shift immediate: second operand must be a 5-bit unsigned immediate");
+        */
     }
     return true;
 }
 
-/* -------------------- expand_macro() -------------------- */
-/* Expands the following macros:
-   - clr rd   → xor rd, rd, rd
-   - push rd  → mov (r31)(-8), rd; subi r31, r31, 8
-   - pop rd   → mov rd, (r31)(0); addi r31, r31, 8
-   - out rs, rt → priv rs, rt, r0, 0x4
-   - in rd    → priv rd, r?, r0, 0x3   (assumes a second register operand is provided)
-   - halt     → trap 0
-*/
 void error(const char *message)
 {
     fprintf(stderr, "Error: %s\n", message);
@@ -625,7 +626,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         new_entry.operand_count = 3;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
-        (*address) += 4;
+        // (*address) += 4;
         return;
     }
     else if (strcasecmp(line_entry->opcode, "halt") == 0)
@@ -639,7 +640,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         new_entry.operand_count = 4;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
-        (*address) += 4;
+        // (*address) += 4;
         return;
     }
 
@@ -655,7 +656,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
-        (*address) += 4;
+        // (*address) += 4;
 
         // Second instruction: subi r31, 8
         memset(&new_entry, 0, sizeof(Line));
@@ -667,7 +668,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
-        (*address) += 4;
+        // (*address) += 4;
         return;
     }
     else if (strcasecmp(line_entry->opcode, "pop") == 0)
@@ -682,7 +683,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
-        (*address) += 4;
+        // (*address) += 4;
 
         // Second instruction: addi r31, 8
         memset(&new_entry, 0, sizeof(Line));
@@ -693,7 +694,7 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
-        (*address) += 4;
+        // (*address) += 4;
         return;
     }
     else if (strcasecmp(line_entry->opcode, "out") == 0)
@@ -722,41 +723,42 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
         new_entry.operand_count = 4;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
-        (*address) += 4;
+        // (*address) += 4;
         return;
     }
     // Inside process_file() or similar:
-if (strcasecmp(line_entry->opcode, "ld") == 0) {
-    expand_ld_instruction(line_entry, instruction_list, address, labels);
-}
+    if (strcasecmp(line_entry->opcode, "ld") == 0)
+    {
 
+        expand_ld_instruction(line_entry, instruction_list, address, labels);
+    }
 
     // If the instruction is not a defined macro, do nothing.
 }
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdint.h>
-
 #define MAX_OPERAND_LENGTH 32
 
-
-void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *address, LabelTable *labels) {
+void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *address, LabelTable *labels)
+{
     long long value;
 
     // If the literal operand starts with a colon, resolve it as a label.
-    if (line_entry->operands[1][0] == ':') {
+    if (line_entry->operands[1][0] == ':')
+    {
         char lbl[20];
         strcpy(lbl, line_entry->operands[1] + 1); // Remove the colon.
         trim_whitespace(lbl);
-        int addr = get_label_address(labels, lbl);
-        if (addr == -1) {
+        unsigned long long addr = (unsigned long long)get_label_address(labels, lbl);
+
+        if (addr == -1)
+        {
             fprintf(stderr, "Undefined label: %s\n", lbl);
             exit(EXIT_FAILURE);
         }
         value = addr;
-    } else {
+    }
+    else
+    {
         value = strtoll(line_entry->operands[1], NULL, 0); // Parse immediate value
     }
 
@@ -771,11 +773,11 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
     new_entry.program_counter = (*address);
     new_entry.type = 'I';
     add_to_arraylist(instruction_list, new_entry);
-    (*address) += 4;
 
     // Step 2: Now we load the value, split if necessary.
     // If the literal fits in a 12-bit immediate (0-4095), use a single addi.
-    if (value >= 0 && value <= 4095) {
+    if (value >= 0 && value <= 4095)
+    {
         memset(&new_entry, 0, sizeof(Line));
         new_entry.type = 'I';
         strcpy(new_entry.opcode, "addi");
@@ -784,8 +786,9 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
-        (*address) += 4;
-    } else {
+    }
+    else
+    {
         // Step 3: For larger values, split into multiple instructions.
         // First, load the most significant 12 bits into the register.
         memset(&new_entry, 0, sizeof(Line));
@@ -796,10 +799,10 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
-        (*address) += 4;
 
         // Step 4: Process the remaining chunks in 12-bit chunks.
-        for (int shift = 40; shift >= 4; shift -= 12) {
+        for (int shift = 40; shift >= 4; shift -= 12)
+        {
             // Shift and add the next chunk of value.
             memset(&new_entry, 0, sizeof(Line));
             new_entry.type = 'I';
@@ -809,7 +812,6 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
             new_entry.operand_count = 2;
             new_entry.program_counter = (*address);
             add_to_arraylist(instruction_list, new_entry);
-            (*address) += 4;
 
             memset(&new_entry, 0, sizeof(Line));
             new_entry.type = 'I';
@@ -819,7 +821,6 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
             new_entry.operand_count = 2;
             new_entry.program_counter = (*address);
             add_to_arraylist(instruction_list, new_entry);
-            (*address) += 4;
         }
 
         // Step 5: Finally, load the last 4 bits.
@@ -831,7 +832,6 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
-        (*address) += 4;
 
         memset(&new_entry, 0, sizeof(Line));
         new_entry.type = 'I';
@@ -841,32 +841,38 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
         new_entry.operand_count = 2;
         new_entry.program_counter = (*address);
         add_to_arraylist(instruction_list, new_entry);
-        (*address) += 4;
     }
 }
 
-
-void resolve_labels(ArrayList *instructions, LabelTable *labels) {
-    for (int i = 0; i < instructions->size; i++) {
+void resolve_labels(ArrayList *instructions, LabelTable *labels)
+{
+    for (int i = 0; i < instructions->size; i++)
+    {
         Line *line = &instructions->lines[i];
 
         // Resolve the dedicated label field, if it starts with a colon.
-        if (line->label[0] == ':') {
+        if (line->label[0] == ':')
+        {
             char lbl[20];
-            strcpy(lbl, line->label + 1);  // Remove the colon
-            trim_whitespace(lbl);          // Ensure no leading/trailing spaces
+            strcpy(lbl, line->label + 1); // Remove the colon
+            trim_whitespace(lbl);         // Ensure no leading/trailing spaces
 
             printf("DEBUG: Resolving label '%s' (without colon)\n", lbl);
             int addr = get_label_address(labels, lbl);
 
-            if (addr != -1) {
+            if (addr != -1)
+            {
                 snprintf(line->label, sizeof(line->label), "%d", addr);
                 printf("DEBUG: Label '%s' resolved to address %d\n", lbl, addr);
-            } else {
+            }
+            else
+            {
                 printf("ERROR: Label '%s' not found in label table!\n", lbl);
                 strcpy(line->label, "UNRESOLVED");
             }
-        } else if (line->label[0] != '\0') {  // Handle labels without colons
+        }
+        else if (line->label[0] != '\0')
+        { // Handle labels without colons
             char lbl[20];
             strncpy(lbl, line->label, sizeof(lbl) - 1);
             lbl[sizeof(lbl) - 1] = '\0';
@@ -875,33 +881,43 @@ void resolve_labels(ArrayList *instructions, LabelTable *labels) {
             printf("DEBUG: Resolving label '%s' (direct lookup)\n", lbl);
             int addr = get_label_address(labels, lbl);
 
-            if (addr != -1) {
+            if (addr != -1)
+            {
                 snprintf(line->label, sizeof(line->label), "%d", addr);
                 printf("DEBUG: Label '%s' resolved to address %d\n", lbl, addr);
-            } else {
+            }
+            else
+            {
                 printf("ERROR: Label '%s' not found in label table!\n", lbl);
                 strcpy(line->label, "UNRESOLVED");
             }
         }
 
         // Also resolve any operand that begins with a colon.
-        for (int j = 0; j < line->operand_count; j++) {
-            if (line->operands[j][0] == ':') {
+        for (int j = 0; j < line->operand_count; j++)
+        {
+            if (line->operands[j][0] == ':')
+            {
                 char lbl[20];
-                strcpy(lbl, line->operands[j] + 1);  // Remove the colon
+                strcpy(lbl, line->operands[j] + 1); // Remove the colon
                 trim_whitespace(lbl);
 
                 printf("DEBUG: Resolving operand label '%s' (without colon)\n", lbl);
                 int addr = get_label_address(labels, lbl);
 
-                if (addr != -1) {
+                if (addr != -1)
+                {
                     snprintf(line->operands[j], sizeof(line->operands[j]), "%d", addr);
                     printf("DEBUG: Operand label '%s' resolved to address %d\n", lbl, addr);
-                } else {
+                }
+                else
+                {
                     printf("ERROR: Operand Label '%s' not found in label table!\n", lbl);
                     strcpy(line->operands[j], "UNRESOLVED");
                 }
-            } else if (isLabelSyntax(line->operands[j])) { // Handle labels without colons
+            }
+            else if (isLabelSyntax(line->operands[j]))
+            { // Handle labels without colons
                 char lbl[20];
                 strncpy(lbl, line->operands[j], sizeof(lbl) - 1);
                 lbl[sizeof(lbl) - 1] = '\0';
@@ -910,10 +926,13 @@ void resolve_labels(ArrayList *instructions, LabelTable *labels) {
                 printf("DEBUG: Resolving operand label '%s' (direct lookup)\n", lbl);
                 int addr = get_label_address(labels, lbl);
 
-                if (addr != -1) {
+                if (addr != -1)
+                {
                     snprintf(line->operands[j], sizeof(line->operands[j]), "%d", addr);
                     printf("DEBUG: Operand label '%s' resolved to address %d\n", lbl, addr);
-                } else {
+                }
+                else
+                {
                     printf("ERROR: Operand Label '%s' not found in label table!\n", lbl);
                     strcpy(line->operands[j], "UNRESOLVED");
                 }
@@ -922,11 +941,11 @@ void resolve_labels(ArrayList *instructions, LabelTable *labels) {
     }
 }
 
-
-
-int process_file_first_pass(const char *input_filename, LabelTable **labels, int *address) {
+int process_file_first_pass(const char *input_filename, LabelTable **labels, int *address)
+{
     FILE *fp = fopen(input_filename, "r");
-    if (!fp) {
+    if (!fp)
+    {
         printf("Error: Could not open input file %s\n", input_filename);
         return 1;
     }
@@ -936,27 +955,32 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
 
     printf("DEBUG: Starting first pass...\n");
 
-    while (fgets(buffer, sizeof(buffer), fp)) {
+    while (fgets(buffer, sizeof(buffer), fp))
+    {
         remove_comments(buffer);
         trim_whitespace(buffer);
         if (strlen(buffer) == 0)
             continue;
 
         // Handle section directives.
-        if (strncmp(buffer, ".code", 5) == 0) {
+        if (strncmp(buffer, ".code", 5) == 0)
+        {
             in_code_section = 1;
             printf("DEBUG: Entering .code section at address %d\n", *address);
             continue;
         }
-        if (strncmp(buffer, ".data", 5) == 0) {
+        if (strncmp(buffer, ".data", 5) == 0)
+        {
             in_code_section = 0;
             printf("DEBUG: Entering .data section at address %d\n", *address);
             continue;
         }
 
         // If the line is a label (starts with ':')
-        if (buffer[0] == ':') {
-            if (!validate_label_format(buffer)) {
+        if (buffer[0] == ':')
+        {
+            if (!validate_label_format(buffer))
+            {
                 fprintf(stderr, "Syntax Error: Invalid label format: %s\n", buffer);
                 fclose(fp);
                 return 1;
@@ -969,11 +993,34 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
             trim_whitespace(tempLabel);
 
             // Store the label in the label table.
+
             store_label(labels, tempLabel + 1, *address, in_code_section);
             printf("DEBUG: Stored Label -> %s at address %d\n", tempLabel + 1, *address);
-        } else {
+        }
+        else
+        {
             // Increment address for instructions or data.
-            *address += in_code_section ? 4 : 8;
+            char *line = malloc(strlen(buffer));
+            line = strdup(buffer);
+            char *tkn = malloc(strlen(line));
+            tkn = strtok(line, " ");
+
+            if (strcmp(tkn, "ld") == 0)
+            {
+                *address += 48;
+            }
+            else if (strcmp(tkn, "push") == 0)
+            {
+                *address += 8;
+            }
+            else if (strcmp(tkn, "pop") == 0)
+            {
+                *address += 8;
+            }
+            else
+            {
+                *address += in_code_section ? 4 : 8;
+            }
             printf("DEBUG: Processed instruction/data, updated address to %d\n", *address);
         }
     }
@@ -984,9 +1031,11 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
     return 0;
 }
 
-int process_file_second_pass(const char *input_filename, ArrayList *lines, LabelTable *labels, int *address) {
+int process_file_second_pass(const char *input_filename, ArrayList *lines, LabelTable *labels, int *address)
+{
     FILE *fp = fopen(input_filename, "r");
-    if (!fp) {
+    if (!fp)
+    {
         printf("Error: Could not open input file %s\n", input_filename);
         return 1;
     }
@@ -995,7 +1044,8 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
     char original_buffer[256]; // Save original line for validation
     int in_code_section = 1;   // 1 = .code, 0 = .data
 
-    while (fgets(buffer, sizeof(buffer), fp)) {
+    while (fgets(buffer, sizeof(buffer), fp))
+    {
         validate_spacing(buffer);
 
         strcpy(original_buffer, buffer); // Save the original line
@@ -1005,9 +1055,10 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
             continue;
 
         // Handle section directives.
-        if (strncmp(buffer, ".code", 5) == 0) {
+        if (strncmp(buffer, ".code", 5) == 0)
+        {
             in_code_section = 1;
-            
+
             // Add .code directive to the array list
             Line section_line;
             memset(&section_line, 0, sizeof(Line));
@@ -1018,9 +1069,10 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
 
             continue;
         }
-        if (strncmp(buffer, ".data", 5) == 0) {
+        if (strncmp(buffer, ".data", 5) == 0)
+        {
             in_code_section = 0;
-            
+
             // Add .data directive to the array list
             Line section_line;
             memset(&section_line, 0, sizeof(Line));
@@ -1033,13 +1085,15 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
         }
 
         // If the line is a label (starts with ':'), skip it (already processed in the first pass).
-        if (buffer[0] == ':') {
+        if (buffer[0] == ':')
+        {
             continue;
         }
 
         // For data section, if the line consists solely of a number, treat it as a data literal.
         char *firstToken = strtok(buffer, " \t");
-        if (!in_code_section && (isdigit(firstToken[0]) || firstToken[0] == '-')) {
+        if (!in_code_section && (isdigit(firstToken[0]) || firstToken[0] == '-'))
+        {
             Line data_line;
             memset(&data_line, 0, sizeof(Line));
             data_line.program_counter = *address;
@@ -1051,7 +1105,7 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
             snprintf(data_line.opcode, sizeof(data_line.opcode), "%d", data_line.literal);
             data_line.operand_count = 0;
             add_to_arraylist(lines, data_line);
-            *address += 8;
+            // *address += 8;
             continue;
         }
 
@@ -1062,7 +1116,8 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
         trim_whitespace(buffer);
 
         char *token = strtok(buffer, " \t");
-        if (!token) {
+        if (!token)
+        {
             fprintf(stderr, "Syntax Error: Empty instruction\n");
             fclose(fp);
             return 1;
@@ -1078,7 +1133,8 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
         line_entry.from_call = 0;
 
         // Check if the instruction is a macro.
-        if (strcasecmp(token, "halt") == 0) {
+        if (strcasecmp(token, "halt") == 0)
+        {
             // Special-case: halt takes no operands.
             strcpy(line_entry.opcode, token);
             line_entry.operand_count = 0;
@@ -1088,7 +1144,9 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
             validate_macro_instruction(validateCopy); // Should succeed.
             free(validateCopy);
             expand_macro(&line_entry, lines, address);
-        } else if (validate_macro(token)) {
+        }
+        else if (validate_macro(token))
+        {
             // Validate macro using a duplicate.
             char *validateCopy = strdup(original_buffer);
             if (!validateCopy)
@@ -1104,9 +1162,11 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
             char *macroToken = strtok(macroLine, " \t");
             strcpy(line_entry.opcode, macroToken);
             int opCount = 0;
-            while ((macroToken = strtok(NULL, " \t,")) != NULL && opCount < 4) {
+            while ((macroToken = strtok(NULL, " \t,")) != NULL && opCount < 4)
+            {
                 trim_whitespace(macroToken);
-                if (strlen(macroToken) > 0) {
+                if (strlen(macroToken) > 0)
+                {
                     strncpy(line_entry.operands[opCount], macroToken, sizeof(line_entry.operands[opCount]) - 1);
                     printf("DEBUG: Macro Operand[%d]: '%s'\n", opCount, line_entry.operands[opCount]);
                     opCount++;
@@ -1116,22 +1176,34 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
             free(macroLine);
 
             expand_macro(&line_entry, lines, address);
-        } else {
+        }
+        else
+        {
             strcpy(line_entry.opcode, token);
             int opCount = 0;
-            while ((token = strtok(NULL, " \t,")) != NULL && opCount < 4) {
-                if (isMemoryOperand(token)) {
+            while ((token = strtok(NULL, " \t,")) != NULL && opCount < 4)
+            {
+                if (isMemoryOperand(token))
+                {
                     strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
-                } else if (token[0] == 'r' && isValidRegister(token)) {
+                }
+                else if (token[0] == 'r' && isValidRegister(token))
+                {
                     strncpy(line_entry.registers[opCount], token, sizeof(line_entry.registers[opCount]) - 1);
                     strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
-                } else if (isdigit(token[0]) || token[0] == '-') {
+                }
+                else if (isdigit(token[0]) || token[0] == '-')
+                {
                     line_entry.literal = atoi(token);
                     strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
-                } else if (token[0] == ':') {
+                }
+                else if (token[0] == ':')
+                {
                     strncpy(line_entry.label, token, sizeof(line_entry.label) - 1);
                     strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
-                } else {
+                }
+                else
+                {
                     strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
                 }
                 printf("DEBUG: Operand[%d]: %s\n", opCount, token);
@@ -1141,7 +1213,7 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
             remove_comments(original_buffer);
             validate_instruction(original_buffer);
             add_to_arraylist(lines, line_entry);
-            *address += in_code_section ? 4 : 8;
+            // *address += in_code_section ? 4 : 8;
         }
     }
 

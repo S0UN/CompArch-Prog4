@@ -8,9 +8,9 @@
 	shftli r2, 12
 	addi r2, 0
 	shftli r2, 12
-	addi r2, 256
+	addi r2, 259
 	shftli r2, 4
-	addi r2, 8
+	addi r2, 4
 	add r3, r4, r5
 .data
 	4132
