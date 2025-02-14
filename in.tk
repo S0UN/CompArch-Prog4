@@ -1,0 +1,2 @@
+.code
+    out r1, r2

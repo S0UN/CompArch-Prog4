@@ -441,22 +441,33 @@ char *assemble_instruction(const char *line)
         // No operands.
     }
     else if (strcmp(info->format, "P") == 0)
+{
+    if (count != 5)
     {
-        if (count != 5)
-        {
-            fprintf(stderr, "Instruction '%s' expects 4 operands.\n", mnemonic);
-            free(result);
-            return NULL;
-        }
-        int rd = parse_register(tokens[1]);
-        int rs = parse_register(tokens[2]);
-        int rt = parse_register(tokens[3]);
-        int imm = atoi(tokens[4]);
-        int_to_bin_string(rd, 5, rd_bin);
-        int_to_bin_string(rs, 5, rs_bin);
-        int_to_bin_string(rt, 5, rt_bin);
-        immediate_to_bin_string(imm, 12, info->immediate_signed, imm_bin);
+        fprintf(stderr, "Instruction '%s' expects 4 operands.\n", mnemonic);
+        free(result);
+        return NULL;
     }
+    
+    int opcode = info->opcode; // Get opcode from instruction struct
+    char opcode_bin[6];
+    int_to_bin_string(opcode, 5, opcode_bin);
+
+    int rd = parse_register(tokens[1]);
+    int rs = parse_register(tokens[2]);
+    int rt = parse_register(tokens[3]);
+    int imm = atoi(tokens[4]);
+
+    char rd_bin[6], rs_bin[6], rt_bin[6], imm_bin[13];
+
+    int_to_bin_string(rd, 5, rd_bin);
+    int_to_bin_string(rs, 5, rs_bin);
+    int_to_bin_string(rt, 5, rt_bin);
+    immediate_to_bin_string(imm, 12, info->immediate_signed, imm_bin);
+
+    sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, rt_bin, imm_bin);
+}
+
     else if (strcmp(info->format, "M1") == 0)
     {
         if (count != 4)
