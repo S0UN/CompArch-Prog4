@@ -196,7 +196,6 @@ int starts_with(const char *str, const char *prefix)
 }
 
 // Assemble a single instruction line into a 32-bit binary string.
-// Fields: [opcode (5)][rd (5)][rs (5)][rt (5)][immediate (12)] (unused fields are zero).
 char *assemble_instruction(const char *line)
 {
     char *result = malloc(33);
@@ -225,7 +224,7 @@ char *assemble_instruction(const char *line)
 
     char *mnemonic = tokens[0];
 
-    // Special handling for "brr" (unchanged)
+    // Special handling for "brr"
     if (strcasecmp(mnemonic, "brr") == 0)
     {
         if (count < 2)
@@ -262,7 +261,7 @@ char *assemble_instruction(const char *line)
         }
     }
 
-    // Special handling for "mov" (all move instructions are written as "mov")
+    // Special handling for "mov"
     if (strcasecmp(mnemonic, "mov") == 0)
     {
         if (count != 3)
@@ -274,12 +273,8 @@ char *assemble_instruction(const char *line)
         char *op1 = tokens[1];
         char *op2 = tokens[2];
         char opcode_bin[6];
-        char rd_bin[6] = "00000";
-        char rs_bin[6] = "00000";
-        char rt_bin[6] = "00000";
+        char rd_bin[6] = "00000", rs_bin[6] = "00000", rt_bin[6] = "00000";
         char imm_bin[13] = "000000000000";
-
-        // Check first operand: if it starts with '(' then it's Form D.
         if (op1[0] == '(')
         {
             // Form D: mov (r_d)(L), r_s
@@ -294,18 +289,19 @@ char *assemble_instruction(const char *line)
             int_to_bin_string(rd, 5, rd_bin);
             int_to_bin_string(rs, 5, rs_bin);
             strcpy(rt_bin, "00000");
-            // Immediate is signed.
             immediate_to_bin_string(imm, 12, 1, imm_bin);
-            // Opcode for Form D is 0x13.
-            int opcode = 0x13;
-            int_to_bin_string(opcode, 5, opcode_bin);
+            {
+                int opcode = 0x13;
+                int_to_bin_string(opcode, 5, opcode_bin);
+            }
+            sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, rt_bin, imm_bin);
+            return result;
         }
         else
         {
             // op1 is a register.
             int rd = parse_register(op1);
             int_to_bin_string(rd, 5, rd_bin);
-            // Now check second operand.
             if (op2[0] == '(')
             {
                 // Form A: mov r_d, (r_s)(L)
@@ -319,13 +315,15 @@ char *assemble_instruction(const char *line)
                 int_to_bin_string(rs, 5, rs_bin);
                 strcpy(rt_bin, "00000");
                 immediate_to_bin_string(imm, 12, 1, imm_bin);
-                // Opcode for Form A is 0x10.
-                int opcode = 0x10;
-                int_to_bin_string(opcode, 5, opcode_bin);
+                {
+                    int opcode = 0x10;
+                    int_to_bin_string(opcode, 5, opcode_bin);
+                }
+                sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, rt_bin, imm_bin);
+                return result;
             }
             else
             {
-                // op2 does not begin with '('.
                 if (op2[0] == 'r' || op2[0] == 'R')
                 {
                     // Form B: mov r_d, r_s
@@ -333,9 +331,12 @@ char *assemble_instruction(const char *line)
                     int_to_bin_string(rs, 5, rs_bin);
                     strcpy(rt_bin, "00000");
                     strcpy(imm_bin, "000000000000");
-                    // Opcode for Form B is 0x11.
-                    int opcode = 0x11;
-                    int_to_bin_string(opcode, 5, opcode_bin);
+                    {
+                        int opcode = 0x11;
+                        int_to_bin_string(opcode, 5, opcode_bin);
+                    }
+                    sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, rt_bin, imm_bin);
+                    return result;
                 }
                 else
                 {
@@ -344,17 +345,18 @@ char *assemble_instruction(const char *line)
                     strcpy(rs_bin, "00000");
                     strcpy(rt_bin, "00000");
                     immediate_to_bin_string(imm, 12, 0, imm_bin);
-                    // Opcode for Form C is 0x12.
-                    int opcode = 0x12;
-                    int_to_bin_string(opcode, 5, opcode_bin);
+                    {
+                        int opcode = 0x12;
+                        int_to_bin_string(opcode, 5, opcode_bin);
+                    }
+                    sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, rt_bin, imm_bin);
+                    return result;
                 }
             }
         }
-        sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, rt_bin, imm_bin);
-        return result;
     }
 
-    // For non-"mov" instructions, use the standard method.
+    // For non-"mov" instructions, get instruction info.
     InstructionInfo *info = getInstructionInfo(mnemonic);
     if (!info)
     {
@@ -363,14 +365,9 @@ char *assemble_instruction(const char *line)
         return NULL;
     }
 
-    char opcode_bin[6];
     int_to_bin_string(info->opcode, 5, opcode_bin);
 
-    char rd_bin[6] = "00000";
-    char rs_bin[6] = "00000";
-    char rt_bin[6] = "00000";
-    char imm_bin[13] = "000000000000";
-
+    // Process each format type and return immediately.
     if (strcmp(info->format, "R") == 0)
     {
         if (count != 4)
@@ -382,9 +379,12 @@ char *assemble_instruction(const char *line)
         int rd = parse_register(tokens[1]);
         int rs = parse_register(tokens[2]);
         int rt = parse_register(tokens[3]);
+        char rd_bin[6], rs_bin[6], rt_bin[6];
         int_to_bin_string(rd, 5, rd_bin);
         int_to_bin_string(rs, 5, rs_bin);
         int_to_bin_string(rt, 5, rt_bin);
+        sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, rt_bin, "000000000000");
+        return result;
     }
     else if (strcmp(info->format, "I") == 0)
     {
@@ -396,8 +396,11 @@ char *assemble_instruction(const char *line)
         }
         int rd = parse_register(tokens[1]);
         int imm = atoi(tokens[2]);
+        char rd_bin[6], imm_bin[13];
         int_to_bin_string(rd, 5, rd_bin);
         immediate_to_bin_string(imm, 12, info->immediate_signed, imm_bin);
+        sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, "00000", "00000", imm_bin);
+        return result;
     }
     else if (strcmp(info->format, "R2") == 0)
     {
@@ -409,8 +412,11 @@ char *assemble_instruction(const char *line)
         }
         int rd = parse_register(tokens[1]);
         int rs = parse_register(tokens[2]);
+        char rd_bin[6], rs_bin[6];
         int_to_bin_string(rd, 5, rd_bin);
         int_to_bin_string(rs, 5, rs_bin);
+        sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, "00000", "000000000000");
+        return result;
     }
     else if (strcmp(info->format, "U") == 0)
     {
@@ -421,7 +427,10 @@ char *assemble_instruction(const char *line)
             return NULL;
         }
         int rd = parse_register(tokens[1]);
+        char rd_bin[6];
         int_to_bin_string(rd, 5, rd_bin);
+        sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, "00000", "00000", "000000000000");
+        return result;
     }
     else if (strcmp(info->format, "J") == 0)
     {
@@ -432,11 +441,15 @@ char *assemble_instruction(const char *line)
             return NULL;
         }
         int imm = atoi(tokens[1]);
+        char imm_bin[13];
         immediate_to_bin_string(imm, 12, info->immediate_signed, imm_bin);
+        sprintf(result, "%s%s%s%s%s", opcode_bin, "00000", "00000", "00000", imm_bin);
+        return result;
     }
     else if (strcmp(info->format, "N") == 0)
     {
-        // No operands.
+        sprintf(result, "%s%s%s%s%s", opcode_bin, "00000", "00000", "00000", "000000000000");
+        return result;
     }
     else if (strcmp(info->format, "P") == 0)
     {
@@ -446,26 +459,18 @@ char *assemble_instruction(const char *line)
             free(result);
             return NULL;
         }
-
-        int opcode = info->opcode; // Get opcode from instruction struct
-        char opcode_bin[6];
-        int_to_bin_string(opcode, 5, opcode_bin);
-
         int rd = parse_register(tokens[1]);
         int rs = parse_register(tokens[2]);
         int rt = parse_register(tokens[3]);
         int imm = atoi(tokens[4]);
-
         char rd_bin[6], rs_bin[6], rt_bin[6], imm_bin[13];
-
         int_to_bin_string(rd, 5, rd_bin);
         int_to_bin_string(rs, 5, rs_bin);
         int_to_bin_string(rt, 5, rt_bin);
         immediate_to_bin_string(imm, 12, info->immediate_signed, imm_bin);
-
         sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, rt_bin, imm_bin);
+        return result;
     }
-
     else if (strcmp(info->format, "M1") == 0)
     {
         if (count != 4)
@@ -477,9 +482,12 @@ char *assemble_instruction(const char *line)
         int rd = parse_register(tokens[1]);
         int rs = parse_register(tokens[2]);
         int imm = atoi(tokens[3]);
+        char rd_bin[6], rs_bin[6], imm_bin[13];
         int_to_bin_string(rd, 5, rd_bin);
         int_to_bin_string(rs, 5, rs_bin);
         immediate_to_bin_string(imm, 12, info->immediate_signed, imm_bin);
+        sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, "00000", imm_bin);
+        return result;
     }
     else
     {
@@ -487,10 +495,8 @@ char *assemble_instruction(const char *line)
         free(result);
         return NULL;
     }
-
-    sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, rt_bin, imm_bin);
-    return result;
 }
+
 
 int main(int argc, char *argv[])
 {
