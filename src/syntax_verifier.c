@@ -197,6 +197,35 @@ int starts_with(const char *str, const char *prefix)
     return 1;
 }
 
+unsigned int hex_to_decimal(const char *hex_str) {
+    unsigned int result = 0;
+    if (hex_str == NULL)
+        return 0;
+
+    // If the string begins with "0x" or "0X", skip it.
+    if (hex_str[0] == '0' && (hex_str[1] == 'x' || hex_str[1] == 'X')) {
+        hex_str += 2;
+    }
+
+    while (*hex_str) {
+        int digit = 0;
+        if (*hex_str >= '0' && *hex_str <= '9')
+            digit = *hex_str - '0';
+        else if (*hex_str >= 'a' && *hex_str <= 'f')
+            digit = *hex_str - 'a' + 10;
+        else if (*hex_str >= 'A' && *hex_str <= 'F')
+            digit = *hex_str - 'A' + 10;
+        else
+            break;  // Stop conversion on encountering a non-hex character
+
+        result = result * 16 + digit;
+        hex_str++;
+    }
+
+    return result;
+}
+
+
 // Assemble a single instruction line into a 32-bit binary string.
 // Fields: [opcode (5)][rd (5)][rs (5)][rt (5)][immediate (12)] (unused fields are zero).
 char *assemble_instruction(const char *line)
@@ -226,6 +255,8 @@ char *assemble_instruction(const char *line)
         return NULL;
 
     char *mnemonic = tokens[0];
+
+    printf("%s\n", mnemonic);
 
     // Special handling for "brr" (unchanged)
     if (strcasecmp(mnemonic, "brr") == 0)
@@ -441,32 +472,42 @@ char *assemble_instruction(const char *line)
         // No operands.
     }
     else if (strcmp(info->format, "P") == 0)
-{
-    if (count != 5)
     {
-        fprintf(stderr, "Instruction '%s' expects 4 operands.\n", mnemonic);
-        free(result);
-        return NULL;
+        if (count != 5)
+        {
+            fprintf(stderr, "Instruction '%s' expects 4 operands.\n", mnemonic);
+            free(result);
+            return NULL;
+        }
+
+        int opcode = info->opcode; // Get opcode from instruction struct
+        char opcode_bin[6];
+        int_to_bin_string(opcode, 5, opcode_bin);
+        fprintf(stderr, "opcode '%s' \n", opcode_bin);
+
+        int rd = parse_register(tokens[1]);
+        int rs = parse_register(tokens[2]);
+        int rt = parse_register(tokens[3]);
+        unsigned int imm = hex_to_decimal(tokens[4]);
+
+        char rd_bin[6], rs_bin[6], rt_bin[6], imm_bin[13];
+
+        int_to_bin_string(rd, 5, rd_bin);
+        int_to_bin_string(rs, 5, rs_bin);
+        int_to_bin_string(rt, 5, rt_bin);
+        fprintf(stderr, "opcode '%s' \n", rd_bin);
+        fprintf(stderr, "opcode '%s' \n", rs_bin);
+
+        fprintf(stderr, "opcode '%s' \n", rt_bin);
+
+        immediate_to_bin_string(imm, 12, info->immediate_signed, imm_bin);
+        fprintf(stderr, "imm '%d' \n", imm);
+
+        sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, rt_bin, imm_bin);
+        fprintf(stderr, "result '%s' \n", result);
+
+        return result;
     }
-    
-    int opcode = info->opcode; // Get opcode from instruction struct
-    char opcode_bin[6];
-    int_to_bin_string(opcode, 5, opcode_bin);
-
-    int rd = parse_register(tokens[1]);
-    int rs = parse_register(tokens[2]);
-    int rt = parse_register(tokens[3]);
-    int imm = atoi(tokens[4]);
-
-    char rd_bin[6], rs_bin[6], rt_bin[6], imm_bin[13];
-
-    int_to_bin_string(rd, 5, rd_bin);
-    int_to_bin_string(rs, 5, rs_bin);
-    int_to_bin_string(rt, 5, rt_bin);
-    immediate_to_bin_string(imm, 12, info->immediate_signed, imm_bin);
-
-    sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, rt_bin, imm_bin);
-}
 
     else if (strcmp(info->format, "M1") == 0)
     {
@@ -502,9 +543,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // ---------------------------
-    // Phase 1: Syntax Verification
-    // ---------------------------
     ArrayList instructions;
     initialize_arraylist(&instructions);
     int address = 0x1000; // PC starts at 0x1000
@@ -540,9 +578,6 @@ int main(int argc, char *argv[])
     free_arraylist(&instructions);
     free_label_table(labels);
 
-    // ---------------------------
-    // Phase 2: Binary Conversion
-    // ---------------------------
     FILE *fin = fopen(tempAssembly, "r");
     if (!fin)
     {
@@ -586,7 +621,10 @@ int main(int argc, char *argv[])
             if (bin_instr)
             {
                 // Convert the 32-character bit string to a uint32_t and write in binary.
+                printf("%s\n", bin_instr);
+
                 uint32_t instr = bitstr_to_uint32(bin_instr);
+                printf("%d\n", instr);
                 fwrite(&instr, sizeof(instr), 1, fout);
                 free(bin_instr);
             }
@@ -1793,12 +1831,13 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
         return;
     }
 
-    // Define a macro that prints to both the file and stdout.
-    #define PRINT_BOTH(fmt, ...)             \
-        do {                                 \
-            fprintf(fp, fmt, ##__VA_ARGS__); \
-            printf(fmt, ##__VA_ARGS__);      \
-        } while (0)
+// Define a macro that prints to both the file and stdout.
+#define PRINT_BOTH(fmt, ...)             \
+    do                                   \
+    {                                    \
+        fprintf(fp, fmt, ##__VA_ARGS__); \
+        printf(fmt, ##__VA_ARGS__);      \
+    } while (0)
 
     for (int i = 0; i < instructions->size; i++)
     {
@@ -1882,7 +1921,7 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
         PRINT_BOTH("\n");
     }
 
-    #undef PRINT_BOTH
+#undef PRINT_BOTH
 
     fclose(fp);
 }
