@@ -19,51 +19,52 @@ LabelTable *labels = NULL;
 
 #define MAX_LINE 256
 
-
-typedef struct {
+typedef struct
+{
     char *mnemonic;
     int opcode;
     char *format;
-    int immediate_signed;  // 0 = unsigned immediate; 1 = signed immediate.
+    int immediate_signed; // 0 = unsigned immediate; 1 = signed immediate.
 } InstructionInfo;
 
 // Instruction set – 30 instructions as specified.
 // (Note: all mov instructions in the file will be given as "mov" and are handled specially below.)
 InstructionInfo instructions[] = {
-    {"add",    0x18, "R", 0},
-    {"addi",   0x19, "I", 0},   // unsigned immediate
-    {"sub",    0x1a, "R", 0},
-    {"subi",   0x1b, "I", 0},   // unsigned immediate
-    {"mul",    0x1c, "R", 0},
-    {"div",    0x1d, "R", 0},
-    {"and",    0x0,  "R", 0},
-    {"or",     0x1,  "R", 0},
-    {"xor",    0x2,  "R", 0},
-    {"not",    0x3,  "R2", 0},
-    {"shftr",  0x4,  "R", 0},
-    {"shftri", 0x5,  "I", 0},   // unsigned immediate
-    {"shftl",  0x6,  "R", 0},
-    {"shftli", 0x7,  "I", 0},   // unsigned immediate
-    {"br",     0x8,  "U", 0},
+    {"add", 0x18, "R", 0},
+    {"addi", 0x19, "I", 0}, // unsigned immediate
+    {"sub", 0x1a, "R", 0},
+    {"subi", 0x1b, "I", 0}, // unsigned immediate
+    {"mul", 0x1c, "R", 0},
+    {"div", 0x1d, "R", 0},
+    {"and", 0x0, "R", 0},
+    {"or", 0x1, "R", 0},
+    {"xor", 0x2, "R", 0},
+    {"not", 0x3, "R2", 0},
+    {"shftr", 0x4, "R", 0},
+    {"shftri", 0x5, "I", 0}, // unsigned immediate
+    {"shftl", 0x6, "R", 0},
+    {"shftli", 0x7, "I", 0}, // unsigned immediate
+    {"br", 0x8, "U", 0},
     // "brr" is ambiguous – see special handling below.
-    {"brnz",   0xb, "R2", 0},
-    {"call",   0xc, "U", 0},
+    {"brnz", 0xb, "R2", 0},
+    {"call", 0xc, "U", 0},
     {"return", 0xd, "N", 0},
-    {"brgt",   0xe, "R", 0},
-    {"priv",   0xf, "P", 1},     // assume its immediate is signed
-    {"ld",     0x20, "I", 0},    // ld rd, L => unsigned immediate
-    {"addf",   0x14, "R", 0},
-    {"subf",   0x15, "R", 0},
-    {"mulf",   0x16, "R", 0},
-    {"divf",   0x17, "R", 0},
-    {"ld",     0x20, "I", 0},    // ld rd, L => unsigned immediate
-    {NULL,     0,     NULL, 0}
-};
+    {"brgt", 0xe, "R", 0},
+    {"priv", 0xf, "P", 1}, // assume its immediate is signed
+    {"ld", 0x20, "I", 0},  // ld rd, L => unsigned immediate
+    {"addf", 0x14, "R", 0},
+    {"subf", 0x15, "R", 0},
+    {"mulf", 0x16, "R", 0},
+    {"divf", 0x17, "R", 0},
+    {"ld", 0x20, "I", 0}, // ld rd, L => unsigned immediate
+    {NULL, 0, NULL, 0}};
 
 // Helper: Convert a 32-character bit string into a uint32_t.
-uint32_t bitstr_to_uint32(char *bitstr) {
+uint32_t bitstr_to_uint32(char *bitstr)
+{
     uint32_t result = 0;
-    while (*bitstr){
+    while (*bitstr)
+    {
         result = (result << 1) | (*bitstr - '0');
         bitstr++;
     }
@@ -71,17 +72,21 @@ uint32_t bitstr_to_uint32(char *bitstr) {
 }
 
 // Helper: Convert a bit string into a uint64_t.
-uint64_t bitstr_to_uint64(char *bitstr) {
+uint64_t bitstr_to_uint64(char *bitstr)
+{
     uint64_t result = 0;
-    while (*bitstr){
+    while (*bitstr)
+    {
         result = (result << 1) | (*bitstr - '0');
         bitstr++;
     }
     return result;
 }
 // Look up an instruction by mnemonic (non-"mov" instructions).
-InstructionInfo* getInstructionInfo(const char *mnemonic) {
-    for (int i = 0; instructions[i].mnemonic != NULL; i++) {
+InstructionInfo *getInstructionInfo(const char *mnemonic)
+{
+    for (int i = 0; instructions[i].mnemonic != NULL; i++)
+    {
         if (strcasecmp(instructions[i].mnemonic, mnemonic) == 0)
             return &instructions[i];
     }
@@ -90,14 +95,16 @@ InstructionInfo* getInstructionInfo(const char *mnemonic) {
 
 // Convert an integer value to a binary string with the specified number of bits.
 // (For signed immediates, using two's complement if negative.)
-void int_to_bin_string(int value, int bits, char *dest) {
+void int_to_bin_string(int value, int bits, char *dest)
+{
     unsigned int mask = 1 << (bits - 1);
     unsigned int uvalue;
     if (value < 0)
         uvalue = ((unsigned int)1 << bits) + value;
     else
         uvalue = value;
-    for (int i = 0; i < bits; i++) {
+    for (int i = 0; i < bits; i++)
+    {
         dest[i] = (uvalue & mask) ? '1' : '0';
         mask >>= 1;
     }
@@ -106,37 +113,46 @@ void int_to_bin_string(int value, int bits, char *dest) {
 
 // Convert an immediate value to a binary string with the specified number of bits,
 // taking into account whether it is signed or unsigned.
-void immediate_to_bin_string(int value, int bits, int signed_immediate, char *dest) {
-    if (!signed_immediate) {
-        if (value < 0) {
+void immediate_to_bin_string(int value, int bits, int signed_immediate, char *dest)
+{
+    if (!signed_immediate)
+    {
+        if (value < 0)
+        {
             fprintf(stderr, "Error: Unsigned immediate cannot be negative: %d\n", value);
             exit(1);
         }
-        if (value >= (1 << bits)) {
+        if (value >= (1 << bits))
+        {
             fprintf(stderr, "Error: Unsigned immediate out of range: %d\n", value);
             exit(1);
         }
         unsigned int uvalue = value;
         unsigned int mask = 1 << (bits - 1);
-        for (int i = 0; i < bits; i++) {
+        for (int i = 0; i < bits; i++)
+        {
             dest[i] = (uvalue & mask) ? '1' : '0';
             mask >>= 1;
         }
         dest[bits] = '\0';
-    } else {
+    }
+    else
+    {
         int_to_bin_string(value, bits, dest);
     }
 }
 
 // Convert a 64-bit (signed) value to a binary string of the specified number of bits.
-void ll_to_bin_string(long long value, int bits, char *dest) {
+void ll_to_bin_string(long long value, int bits, char *dest)
+{
     unsigned long long mask = 1ULL << (bits - 1);
     unsigned long long uvalue;
     if (value < 0)
         uvalue = ((unsigned long long)1 << bits) + value;
     else
         uvalue = value;
-    for (int i = 0; i < bits; i++) {
+    for (int i = 0; i < bits; i++)
+    {
         dest[i] = (uvalue & mask) ? '1' : '0';
         mask >>= 1;
     }
@@ -144,18 +160,23 @@ void ll_to_bin_string(long long value, int bits, char *dest) {
 }
 
 // Given a register token like "r2", return its integer number.
-int parse_register(const char *token) {
-    if (token[0] == 'r' || token[0] == 'R') {
+int parse_register(const char *token)
+{
+    if (token[0] == 'r' || token[0] == 'R')
+    {
         return atoi(token + 1);
     }
     return -1;
 }
 
 // Remove commas from a string (in place).
-void remove_commas(char *str) {
+void remove_commas(char *str)
+{
     char *src = str, *dst = str;
-    while (*src) {
-        if (*src != ',') {
+    while (*src)
+    {
+        if (*src != ',')
+        {
             *dst++ = *src;
         }
         src++;
@@ -164,8 +185,10 @@ void remove_commas(char *str) {
 }
 
 // Check if a string starts with a given prefix (case insensitive).
-int starts_with(const char *str, const char *prefix) {
-    while (*prefix) {
+int starts_with(const char *str, const char *prefix)
+{
+    while (*prefix)
+    {
         if (tolower(*prefix) != tolower(*str))
             return 0;
         prefix++;
@@ -176,38 +199,45 @@ int starts_with(const char *str, const char *prefix) {
 
 // Assemble a single instruction line into a 32-bit binary string.
 // Fields: [opcode (5)][rd (5)][rs (5)][rt (5)][immediate (12)] (unused fields are zero).
-char* assemble_instruction(const char *line) {
+char *assemble_instruction(const char *line)
+{
     char *result = malloc(33);
-    if (!result) {
+    if (!result)
+    {
         fprintf(stderr, "Memory allocation failed\n");
         exit(1);
     }
     result[0] = '\0';
-    
+
     char buffer[MAX_LINE];
     strncpy(buffer, line, MAX_LINE);
     buffer[MAX_LINE - 1] = '\0';
     remove_commas(buffer);
-    
+
     char *tokens[6];
     int count = 0;
     char *token = strtok(buffer, " \t\n");
-    while (token && count < 6) {
+    while (token && count < 6)
+    {
         tokens[count++] = token;
         token = strtok(NULL, " \t\n");
     }
-    if (count == 0) return NULL;
-    
+    if (count == 0)
+        return NULL;
+
     char *mnemonic = tokens[0];
-    
+
     // Special handling for "brr" (unchanged)
-    if (strcasecmp(mnemonic, "brr") == 0) {
-        if (count < 2) {
+    if (strcasecmp(mnemonic, "brr") == 0)
+    {
+        if (count < 2)
+        {
             fprintf(stderr, "Not enough operands for brr instruction\n");
             free(result);
             return NULL;
         }
-        if (tokens[1][0] == 'r' || tokens[1][0] == 'R') {
+        if (tokens[1][0] == 'r' || tokens[1][0] == 'R')
+        {
             int opcode = 0x9;
             char opcode_bin[6];
             int_to_bin_string(opcode, 5, opcode_bin);
@@ -219,7 +249,9 @@ char* assemble_instruction(const char *line) {
             strcpy(imm_bin, "000000000000");
             sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, rt_bin, imm_bin);
             return result;
-        } else {
+        }
+        else
+        {
             int opcode = 0xa;
             char opcode_bin[6];
             int_to_bin_string(opcode, 5, opcode_bin);
@@ -231,10 +263,12 @@ char* assemble_instruction(const char *line) {
             return result;
         }
     }
-    
+
     // Special handling for "mov" (all move instructions are written as "mov")
-    if (strcasecmp(mnemonic, "mov") == 0) {
-        if (count != 3) {
+    if (strcasecmp(mnemonic, "mov") == 0)
+    {
+        if (count != 3)
+        {
             fprintf(stderr, "Instruction 'mov' expects 2 operands.\n");
             free(result);
             return NULL;
@@ -246,12 +280,14 @@ char* assemble_instruction(const char *line) {
         char rs_bin[6] = "00000";
         char rt_bin[6] = "00000";
         char imm_bin[13] = "000000000000";
-        
+
         // Check first operand: if it starts with '(' then it's Form D.
-        if (op1[0] == '(') {
+        if (op1[0] == '(')
+        {
             // Form D: mov (r_d)(L), r_s
             int rd, imm;
-            if (sscanf(op1, "(r%d)(%d)", &rd, &imm) != 2) {
+            if (sscanf(op1, "(r%d)(%d)", &rd, &imm) != 2)
+            {
                 fprintf(stderr, "Invalid format for mov operand: %s\n", op1);
                 free(result);
                 return NULL;
@@ -265,15 +301,19 @@ char* assemble_instruction(const char *line) {
             // Opcode for Form D is 0x13.
             int opcode = 0x13;
             int_to_bin_string(opcode, 5, opcode_bin);
-        } else {
+        }
+        else
+        {
             // op1 is a register.
             int rd = parse_register(op1);
             int_to_bin_string(rd, 5, rd_bin);
             // Now check second operand.
-            if (op2[0] == '(') {
+            if (op2[0] == '(')
+            {
                 // Form A: mov r_d, (r_s)(L)
                 int rs, imm;
-                if (sscanf(op2, "(r%d)(%d)", &rs, &imm) != 2) {
+                if (sscanf(op2, "(r%d)(%d)", &rs, &imm) != 2)
+                {
                     fprintf(stderr, "Invalid format for mov operand: %s\n", op2);
                     free(result);
                     return NULL;
@@ -284,9 +324,12 @@ char* assemble_instruction(const char *line) {
                 // Opcode for Form A is 0x10.
                 int opcode = 0x10;
                 int_to_bin_string(opcode, 5, opcode_bin);
-            } else {
+            }
+            else
+            {
                 // op2 does not begin with '('.
-                if (op2[0]=='r' || op2[0]=='R') {
+                if (op2[0] == 'r' || op2[0] == 'R')
+                {
                     // Form B: mov r_d, r_s
                     int rs = parse_register(op2);
                     int_to_bin_string(rs, 5, rs_bin);
@@ -295,7 +338,9 @@ char* assemble_instruction(const char *line) {
                     // Opcode for Form B is 0x11.
                     int opcode = 0x11;
                     int_to_bin_string(opcode, 5, opcode_bin);
-                } else {
+                }
+                else
+                {
                     // Form C: mov r_d, L
                     int imm = atoi(op2);
                     strcpy(rs_bin, "00000");
@@ -310,25 +355,28 @@ char* assemble_instruction(const char *line) {
         sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, rt_bin, imm_bin);
         return result;
     }
-    
+
     // For non-"mov" instructions, use the standard method.
     InstructionInfo *info = getInstructionInfo(mnemonic);
-    if (!info) {
+    if (!info)
+    {
         fprintf(stderr, "Unknown mnemonic: %s\n", mnemonic);
         free(result);
         return NULL;
     }
-    
+
     char opcode_bin[6];
     int_to_bin_string(info->opcode, 5, opcode_bin);
-    
-    char rd_bin[6]   = "00000";
-    char rs_bin[6]   = "00000";
-    char rt_bin[6]   = "00000";
+
+    char rd_bin[6] = "00000";
+    char rs_bin[6] = "00000";
+    char rt_bin[6] = "00000";
     char imm_bin[13] = "000000000000";
-    
-    if (strcmp(info->format, "R") == 0) {
-        if (count != 4) {
+
+    if (strcmp(info->format, "R") == 0)
+    {
+        if (count != 4)
+        {
             fprintf(stderr, "Instruction '%s' expects 3 operands.\n", mnemonic);
             free(result);
             return NULL;
@@ -339,8 +387,11 @@ char* assemble_instruction(const char *line) {
         int_to_bin_string(rd, 5, rd_bin);
         int_to_bin_string(rs, 5, rs_bin);
         int_to_bin_string(rt, 5, rt_bin);
-    } else if (strcmp(info->format, "I") == 0) {
-        if (count != 3) {
+    }
+    else if (strcmp(info->format, "I") == 0)
+    {
+        if (count != 3)
+        {
             fprintf(stderr, "Instruction '%s' expects 2 operands.\n", mnemonic);
             free(result);
             return NULL;
@@ -349,8 +400,11 @@ char* assemble_instruction(const char *line) {
         int imm = atoi(tokens[2]);
         int_to_bin_string(rd, 5, rd_bin);
         immediate_to_bin_string(imm, 12, info->immediate_signed, imm_bin);
-    } else if (strcmp(info->format, "R2") == 0) {
-        if (count != 3) {
+    }
+    else if (strcmp(info->format, "R2") == 0)
+    {
+        if (count != 3)
+        {
             fprintf(stderr, "Instruction '%s' expects 2 operands.\n", mnemonic);
             free(result);
             return NULL;
@@ -359,26 +413,37 @@ char* assemble_instruction(const char *line) {
         int rs = parse_register(tokens[2]);
         int_to_bin_string(rd, 5, rd_bin);
         int_to_bin_string(rs, 5, rs_bin);
-    } else if (strcmp(info->format, "U") == 0) {
-        if (count != 2) {
+    }
+    else if (strcmp(info->format, "U") == 0)
+    {
+        if (count != 2)
+        {
             fprintf(stderr, "Instruction '%s' expects 1 operand.\n", mnemonic);
             free(result);
             return NULL;
         }
         int rd = parse_register(tokens[1]);
         int_to_bin_string(rd, 5, rd_bin);
-    } else if (strcmp(info->format, "J") == 0) {
-        if (count != 2) {
+    }
+    else if (strcmp(info->format, "J") == 0)
+    {
+        if (count != 2)
+        {
             fprintf(stderr, "Instruction '%s' expects 1 immediate operand.\n", mnemonic);
             free(result);
             return NULL;
         }
         int imm = atoi(tokens[1]);
         immediate_to_bin_string(imm, 12, info->immediate_signed, imm_bin);
-    } else if (strcmp(info->format, "N") == 0) {
+    }
+    else if (strcmp(info->format, "N") == 0)
+    {
         // No operands.
-    } else if (strcmp(info->format, "P") == 0) {
-        if (count != 5) {
+    }
+    else if (strcmp(info->format, "P") == 0)
+    {
+        if (count != 5)
+        {
             fprintf(stderr, "Instruction '%s' expects 4 operands.\n", mnemonic);
             free(result);
             return NULL;
@@ -391,8 +456,11 @@ char* assemble_instruction(const char *line) {
         int_to_bin_string(rs, 5, rs_bin);
         int_to_bin_string(rt, 5, rt_bin);
         immediate_to_bin_string(imm, 12, info->immediate_signed, imm_bin);
-    } else if (strcmp(info->format, "M1") == 0) {
-        if (count != 4) {
+    }
+    else if (strcmp(info->format, "M1") == 0)
+    {
+        if (count != 4)
+        {
             fprintf(stderr, "Instruction '%s' expects 3 operands.\n", mnemonic);
             free(result);
             return NULL;
@@ -403,18 +471,22 @@ char* assemble_instruction(const char *line) {
         int_to_bin_string(rd, 5, rd_bin);
         int_to_bin_string(rs, 5, rs_bin);
         immediate_to_bin_string(imm, 12, info->immediate_signed, imm_bin);
-    } else {
+    }
+    else
+    {
         fprintf(stderr, "Unhandled format for instruction: %s\n", mnemonic);
         free(result);
         return NULL;
     }
-    
+
     sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, rt_bin, imm_bin);
     return result;
 }
 
-int main(int argc, char *argv[]) {
-    if (argc != 3) {
+int main(int argc, char *argv[])
+{
+    if (argc != 3)
+    {
         printf("Usage: %s <source_input.asm> <final_output.bin>\n", argv[0]);
         return 1;
     }
@@ -428,7 +500,8 @@ int main(int argc, char *argv[]) {
     LabelTable *labels = NULL;
 
     // First pass: Collect labels.
-    if (process_file_first_pass(argv[1], &labels, &address) != 0) {
+    if (process_file_first_pass(argv[1], &labels, &address) != 0)
+    {
         printf("Error processing file during first pass.\n");
         free_arraylist(&instructions);
         free_label_table(labels);
@@ -436,7 +509,8 @@ int main(int argc, char *argv[]) {
     }
 
     // Second pass: Expand macros and collect instructions.
-    if (process_file_second_pass(argv[1], &instructions, labels, &address) != 0) {
+    if (process_file_second_pass(argv[1], &instructions, labels, &address) != 0)
+    {
         printf("Error processing file during second pass.\n");
         free_arraylist(&instructions);
         free_label_table(labels);
@@ -459,14 +533,16 @@ int main(int argc, char *argv[]) {
     // Phase 2: Binary Conversion
     // ---------------------------
     FILE *fin = fopen(tempAssembly, "r");
-    if (!fin) {
+    if (!fin)
+    {
         perror("Error opening intermediate assembly file");
         return 1;
     }
 
     // Open final output file in binary mode.
     FILE *fout = fopen(argv[2], "wb");
-    if (!fout) {
+    if (!fout)
+    {
         perror("Error opening final output file");
         fclose(fin);
         return 1;
@@ -474,13 +550,15 @@ int main(int argc, char *argv[]) {
 
     int mode = 0; // 1 = code; 2 = data.
     char line[MAX_LINE];
-    while (fgets(line, sizeof(line), fin)) {
+    while (fgets(line, sizeof(line), fin))
+    {
         char *trimmed = line;
         while (isspace(*trimmed))
             trimmed++;
 
         // Check for section headers.
-        if (trimmed[0] == '.') {
+        if (trimmed[0] == '.')
+        {
             if (starts_with(trimmed, ".code"))
                 mode = 1;
             else if (starts_with(trimmed, ".data"))
@@ -491,15 +569,19 @@ int main(int argc, char *argv[]) {
         if (strlen(trimmed) == 0)
             continue;
 
-        if (mode == 1) {
+        if (mode == 1)
+        {
             char *bin_instr = assemble_instruction(trimmed);
-            if (bin_instr) {
+            if (bin_instr)
+            {
                 // Convert the 32-character bit string to a uint32_t and write in binary.
                 uint32_t instr = bitstr_to_uint32(bin_instr);
                 fwrite(&instr, sizeof(instr), 1, fout);
                 free(bin_instr);
             }
-        } else if (mode == 2) {
+        }
+        else if (mode == 2)
+        {
             long long data_val = atoll(trimmed);
             char data_bin[65]; // 64 bits + null terminator.
             ll_to_bin_string(data_val, 64, data_bin);
@@ -1245,7 +1327,7 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
     new_entry1.program_counter = (*address);
     new_entry1.type = 'I';
     add_to_arraylist(instruction_list, new_entry1);
-   // (*address) += 4;
+    // (*address) += 4;
 
     Line new_entry2;
     memset(&new_entry2, 0, sizeof(Line));
@@ -1257,7 +1339,7 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
     new_entry2.operand_count = 2;
     new_entry2.program_counter = (*address);
     add_to_arraylist(instruction_list, new_entry2);
-   // (*address) += 4;
+    // (*address) += 4;
 
     // --- Instructions 3-10: Four pairs of (shftli, addi) for chunks 1 to 4 ---
     // Each pair shifts left by 12 bits and then adds the next 12-bit chunk.
@@ -1288,7 +1370,7 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
             new_entry4.operand_count = 2;
             new_entry4.program_counter = (*address);
             add_to_arraylist(instruction_list, new_entry4);
-           // (*address) += 4;
+            // (*address) += 4;
         }
     }
 
@@ -1312,7 +1394,7 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
     new_entry6.operand_count = 2;
     new_entry6.program_counter = (*address);
     add_to_arraylist(instruction_list, new_entry6);
-  //  (*address) += 4;
+    //  (*address) += 4;
 }
 
 void resolve_labels(ArrayList *instructions, LabelTable *labels)
@@ -1571,7 +1653,7 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
             data_line.size = 8; // Data items take 8 bytes.
             data_line.type = 'D';
             // Save the literal as an integer value.
-            data_line.literal = (int)atoll(firstToken);
+            data_line.literal = (unsigned int)strtoul(firstToken, NULL, 0);
             // Store the literal as text in the opcode field (so we can print it).
             snprintf(data_line.opcode, sizeof(data_line.opcode), "%d", data_line.literal);
             data_line.operand_count = 0;
@@ -1701,10 +1783,10 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
     }
 
     // Define a macro that prints to both the file and stdout.
-    #define PRINT_BOTH(fmt, ...) \
-        do { \
+    #define PRINT_BOTH(fmt, ...)             \
+        do {                                 \
             fprintf(fp, fmt, ##__VA_ARGS__); \
-            printf(fmt, ##__VA_ARGS__); \
+            printf(fmt, ##__VA_ARGS__);      \
         } while (0)
 
     for (int i = 0; i < instructions->size; i++)
@@ -1718,7 +1800,18 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
             continue;
         }
 
-        // Indent instructions with a tab.
+        // If this is a data line (type 'D' with no operands),
+        // treat the opcode field as containing the literal (as text),
+        // convert it to an unsigned int, and print it.
+        if (line->type == 'D' && line->operand_count == 0)
+        {
+            // Using strtoul to convert the text to an unsigned int.
+            unsigned int data = (unsigned int)strtoul(line->opcode, NULL, 0);
+            PRINT_BOTH("%u\n", data);
+            continue;
+        }
+
+        // Otherwise, assume it's a code instruction.
         PRINT_BOTH("\t");
 
         // Formatting based on instruction type.
