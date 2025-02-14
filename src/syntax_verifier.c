@@ -748,100 +748,106 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
         char lbl[20];
         strcpy(lbl, line_entry->operands[1] + 1); // Remove the colon.
         trim_whitespace(lbl);
-        unsigned long long addr = (unsigned long long)get_label_address(labels, lbl);
-
-        if (addr == -1)
+        unsigned long long addr_val = (unsigned long long)get_label_address(labels, lbl);
+        if (addr_val == (unsigned long long)-1)
         {
             fprintf(stderr, "Undefined label: %s\n", lbl);
             exit(EXIT_FAILURE);
         }
-        value = addr;
+        value = addr_val;
     }
     else
     {
         value = strtoll(line_entry->operands[1], NULL, 0); // Parse immediate value
     }
 
-    // Step 1: Clear the register using "xor rd, rd, rd".
-    Line new_entry;
-    memset(&new_entry, 0, sizeof(Line));
-    strcpy(new_entry.opcode, "xor");
-    strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-    strncpy(new_entry.operands[1], line_entry->operands[0], sizeof(new_entry.operands[1]) - 1);
-    strncpy(new_entry.operands[2], line_entry->operands[0], sizeof(new_entry.operands[2]) - 1);
-    new_entry.operand_count = 3;
-    new_entry.program_counter = (*address);
-    new_entry.type = 'I';
-    add_to_arraylist(instruction_list, new_entry);
+    // Break the 64-bit immediate into fixed chunks.
+    long long chunk0 = (value >> 52) & 0xFFF; // top 12 bits
+    long long chunk1 = (value >> 40) & 0xFFF;
+    long long chunk2 = (value >> 28) & 0xFFF;
+    long long chunk3 = (value >> 16) & 0xFFF;
+    long long chunk4 = (value >> 4) & 0xFFF;
+    long long chunk5 = value & 0xF; // final 4 bits
 
-    // Step 2: Now we load the value, split if necessary.
-    // If the literal fits in a 12-bit immediate (0-4095), use a single addi.
-    if (value >= 0 && value <= 4095)
-    {
-        memset(&new_entry, 0, sizeof(Line));
-        new_entry.type = 'I';
-        strcpy(new_entry.opcode, "addi");
-        strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-        snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%lld", value);
-        new_entry.operand_count = 2;
-        new_entry.program_counter = (*address);
-        add_to_arraylist(instruction_list, new_entry);
-    }
-    else
-    {
-        // Step 3: For larger values, split into multiple instructions.
-        // First, load the most significant 12 bits into the register.
-        memset(&new_entry, 0, sizeof(Line));
-        new_entry.type = 'I';
-        strcpy(new_entry.opcode, "addi");
-        strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-        snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%lld", (value >> 52) & 0xFFF);
-        new_entry.operand_count = 2;
-        new_entry.program_counter = (*address);
-        add_to_arraylist(instruction_list, new_entry);
+    Line new_entry1;
+    memset(&new_entry1, 0, sizeof(Line));
+    strcpy(new_entry1.opcode, "xor");
+    // All three operands are the destination register.
+    strncpy(new_entry1.operands[0], line_entry->operands[0], sizeof(new_entry1.operands[0]) - 1);
+    strncpy(new_entry1.operands[1], line_entry->operands[0], sizeof(new_entry1.operands[1]) - 1);
+    strncpy(new_entry1.operands[2], line_entry->operands[0], sizeof(new_entry1.operands[2]) - 1);
+    new_entry1.operand_count = 3;
+    new_entry1.program_counter = (*address);
+    new_entry1.type = 'I';
+    add_to_arraylist(instruction_list, new_entry1);
+    (*address) += 4;
 
-        // Step 4: Process the remaining chunks in 12-bit chunks.
-        for (int shift = 40; shift >= 4; shift -= 12)
+    Line new_entry2;
+    memset(&new_entry2, 0, sizeof(Line));
+    new_entry2.type = 'I';
+    strcpy(new_entry2.opcode, "addi");
+    strncpy(new_entry2.operands[0], line_entry->operands[0], sizeof(new_entry2.operands[0]) - 1);
+    // Use chunk0 (even if it is 0).
+    snprintf(new_entry2.operands[1], sizeof(new_entry2.operands[1]), "%lld", chunk0);
+    new_entry2.operand_count = 2;
+    new_entry2.program_counter = (*address);
+    add_to_arraylist(instruction_list, new_entry2);
+   // (*address) += 4;
+
+    // --- Instructions 3-10: Four pairs of (shftli, addi) for chunks 1 to 4 ---
+    // Each pair shifts left by 12 bits and then adds the next 12-bit chunk.
+    long long chunks[4] = {chunk1, chunk2, chunk3, chunk4};
+    for (int i = 0; i < 4; i++)
+    {
+        // Shift left by 12
         {
-            // Shift and add the next chunk of value.
-            memset(&new_entry, 0, sizeof(Line));
-            new_entry.type = 'I';
-            strcpy(new_entry.opcode, "shftli");
-            strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-            snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "12");
-            new_entry.operand_count = 2;
-            new_entry.program_counter = (*address);
-            add_to_arraylist(instruction_list, new_entry);
-
-            memset(&new_entry, 0, sizeof(Line));
-            new_entry.type = 'I';
-            strcpy(new_entry.opcode, "addi");
-            strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-            snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%lld", (value >> shift) & 0xFFF);
-            new_entry.operand_count = 2;
-            new_entry.program_counter = (*address);
-            add_to_arraylist(instruction_list, new_entry);
+            Line new_entry3;
+            memset(&new_entry3, 0, sizeof(Line));
+            new_entry3.type = 'I';
+            strcpy(new_entry3.opcode, "shftli");
+            strncpy(new_entry3.operands[0], line_entry->operands[0], sizeof(new_entry3.operands[0]) - 1);
+            snprintf(new_entry3.operands[1], sizeof(new_entry3.operands[1]), "12");
+            new_entry3.operand_count = 2;
+            new_entry3.program_counter = (*address);
+            add_to_arraylist(instruction_list, new_entry3);
+            //(*address) += 4;
         }
-
-        // Step 5: Finally, load the last 4 bits.
-        memset(&new_entry, 0, sizeof(Line));
-        new_entry.type = 'I';
-        strcpy(new_entry.opcode, "shftli");
-        strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-        snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "4");
-        new_entry.operand_count = 2;
-        new_entry.program_counter = (*address);
-        add_to_arraylist(instruction_list, new_entry);
-
-        memset(&new_entry, 0, sizeof(Line));
-        new_entry.type = 'I';
-        strcpy(new_entry.opcode, "addi");
-        strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
-        snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%lld", value & 0xF);
-        new_entry.operand_count = 2;
-        new_entry.program_counter = (*address);
-        add_to_arraylist(instruction_list, new_entry);
+        // Add the 12-bit chunk (even if it is 0)
+        {
+            Line new_entry4;
+            memset(&new_entry4, 0, sizeof(Line));
+            new_entry4.type = 'I';
+            strcpy(new_entry4.opcode, "addi");
+            strncpy(new_entry4.operands[0], line_entry->operands[0], sizeof(new_entry4.operands[0]) - 1);
+            snprintf(new_entry4.operands[1], sizeof(new_entry4.operands[1]), "%lld", chunks[i]);
+            new_entry4.operand_count = 2;
+            new_entry4.program_counter = (*address);
+            add_to_arraylist(instruction_list, new_entry4);
+           // (*address) += 4;
+        }
     }
+
+    Line new_entry5;
+    memset(&new_entry5, 0, sizeof(Line));
+    new_entry5.type = 'I';
+    strcpy(new_entry5.opcode, "shftli");
+    strncpy(new_entry5.operands[0], line_entry->operands[0], sizeof(new_entry5.operands[0]) - 1);
+    snprintf(new_entry5.operands[1], sizeof(new_entry5.operands[1]), "4");
+    new_entry5.operand_count = 2;
+    new_entry5.program_counter = (*address);
+    add_to_arraylist(instruction_list, new_entry5);
+    //(*address) += 4;
+    Line new_entry6;
+    memset(&new_entry6, 0, sizeof(Line));
+    new_entry6.type = 'I';
+    strcpy(new_entry6.opcode, "addi");
+    strncpy(new_entry6.operands[0], line_entry->operands[0], sizeof(new_entry6.operands[0]) - 1);
+    // Add the final 4 bits.
+    snprintf(new_entry6.operands[1], sizeof(new_entry6.operands[1]), "%lld", chunk5);
+    new_entry6.operand_count = 2;
+    new_entry6.program_counter = (*address);
+    add_to_arraylist(instruction_list, new_entry6);
+  //  (*address) += 4;
 }
 
 void resolve_labels(ArrayList *instructions, LabelTable *labels)
