@@ -1,13 +1,10 @@
 #!/bin/bash
 
-FILENAME="hw4"
+# Compile the unified executable (syntax_verifier.c now includes binary conversion)
+gcc -o hw4 -Iinclude src/arraylist.c src/label_table.c src/line.c src/syntax_verifier.c
 
-# Compile the source files (excluding goodcode.c)
-gcc -o $FILENAME -Iinclude src/arraylist.c src/label_table.c src/line.c  src/syntax_verifier.c
-
-# Move the compiled executable to the script's directory
-mv $FILENAME "$(dirname "$0")"
+# Move the compiled executable to the script's directory (if it's not already there)
+mv hw4 "$(dirname "$0")"
 
 # Make the executable runnable
-chmod +x $FILENAME
-
+chmod +x hw4
