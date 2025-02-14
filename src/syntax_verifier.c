@@ -145,12 +145,9 @@ void immediate_to_bin_string(int value, int bits, int signed_immediate, char *de
 // Convert a 64-bit (signed) value to a binary string of the specified number of bits.
 void ll_to_bin_string(long long value, int bits, char *dest)
 {
+    // Cast the value directly to unsigned long long. This produces the two's complement representation.
+    unsigned long long uvalue = (unsigned long long)value;
     unsigned long long mask = 1ULL << (bits - 1);
-    unsigned long long uvalue;
-    if (value < 0)
-        uvalue = ((unsigned long long)1 << bits) + value;
-    else
-        uvalue = value;
     for (int i = 0; i < bits; i++)
     {
         dest[i] = (uvalue & mask) ? '1' : '0';
@@ -158,6 +155,7 @@ void ll_to_bin_string(long long value, int bits, char *dest)
     }
     dest[bits] = '\0';
 }
+
 
 // Given a register token like "r2", return its integer number.
 int parse_register(const char *token)
@@ -197,17 +195,20 @@ int starts_with(const char *str, const char *prefix)
     return 1;
 }
 
-unsigned int hex_to_decimal(const char *hex_str) {
+unsigned int hex_to_decimal(const char *hex_str)
+{
     unsigned int result = 0;
     if (hex_str == NULL)
         return 0;
 
     // If the string begins with "0x" or "0X", skip it.
-    if (hex_str[0] == '0' && (hex_str[1] == 'x' || hex_str[1] == 'X')) {
+    if (hex_str[0] == '0' && (hex_str[1] == 'x' || hex_str[1] == 'X'))
+    {
         hex_str += 2;
     }
 
-    while (*hex_str) {
+    while (*hex_str)
+    {
         int digit = 0;
         if (*hex_str >= '0' && *hex_str <= '9')
             digit = *hex_str - '0';
@@ -216,7 +217,7 @@ unsigned int hex_to_decimal(const char *hex_str) {
         else if (*hex_str >= 'A' && *hex_str <= 'F')
             digit = *hex_str - 'A' + 10;
         else
-            break;  // Stop conversion on encountering a non-hex character
+            break; // Stop conversion on encountering a non-hex character
 
         result = result * 16 + digit;
         hex_str++;
@@ -224,7 +225,6 @@ unsigned int hex_to_decimal(const char *hex_str) {
 
     return result;
 }
-
 
 // Assemble a single instruction line into a 32-bit binary string.
 // Fields: [opcode (5)][rd (5)][rs (5)][rt (5)][immediate (12)] (unused fields are zero).
@@ -534,6 +534,16 @@ char *assemble_instruction(const char *line)
     sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, rt_bin, imm_bin);
     return result;
 }
+void ull_to_bin_string(unsigned long long value, int bits, char *dest)
+{
+    unsigned long long mask = 1ULL << (bits - 1);
+    for (int i = 0; i < bits; i++)
+    {
+        dest[i] = (value & mask) ? '1' : '0';
+        mask >>= 1;
+    }
+    dest[bits] = '\0';
+}
 
 int main(int argc, char *argv[])
 {
@@ -629,15 +639,25 @@ int main(int argc, char *argv[])
                 free(bin_instr);
             }
         }
-        else if (mode == 2)
-        {
-            long long data_val = atoll(trimmed);
-            char data_bin[65]; // 64 bits + null terminator.
-            ll_to_bin_string(data_val, 64, data_bin);
-            // Convert the 64-bit string to a uint64_t and write.
-            uint64_t data = bitstr_to_uint64(data_bin);
-            fwrite(&data, sizeof(data), 1, fout);
-        }
+   else if (mode == 2)
+{
+    // Read the input string as a 64-bit unsigned integer.
+    char* endptr;
+    unsigned long long value = strtoull(trimmed, &endptr, 0);
+    printf("%llu",value);
+    // Force 32-bit interpretation and sign-extension:
+    // Cast to a 32-bit signed integer so that 0x00000000FFFFFFFF becomes -1,
+    // then cast back to 64 bits (which sign-extends -1 to 0xFFFFFFFFFFFFFFFF).
+    int32_t temp = (int32_t)value;
+    value = (uint64_t)temp;
+
+    char data_bin[65]; // 64 bits + null terminator.
+    
+    ll_to_bin_string(value, 64, data_bin);
+    uint64_t data = bitstr_to_uint64(data_bin);
+    fwrite(&data, sizeof(data), 1, fout);
+}
+
     }
 
     fclose(fin);

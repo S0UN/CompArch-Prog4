@@ -1,2 +1,2 @@
-.code
-    out r1, r2
+.data
+    -1
