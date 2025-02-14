@@ -19,17 +19,7 @@ LabelTable *labels = NULL;
 
 #define MAX_LINE 256
 
-// Structure that holds an instruction’s mnemonic, its opcode, its format code,
-// and a flag indicating whether its immediate operand (if any) is signed (1) or unsigned (0).
-// Format codes for non-mov instructions:
-//   "R"  : three registers (rd, rs, rt)
-//   "I"  : register and immediate (rd, L)
-//   "R2" : two registers (rd, rs)
-//   "U"  : one register (rd)
-//   "J"  : immediate only
-//   "N"  : no operand
-//   "P"  : privileged instruction (rd, rs, rt, L)
-//   "M1" : data movement with register, register, immediate (for movmem and movmem2)
+
 typedef struct {
     char *mnemonic;
     int opcode;
@@ -971,7 +961,7 @@ bool validate_instruction(const char *line)
     }
     else if (strcasecmp(opcode, "call") == 0)
     {
-        if (operandCount != 3)
+        if (operandCount != 1)
             error("call requires one operand (a 12-bit signed immediate or label)");
 
         /*
@@ -1710,76 +1700,85 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
         return;
     }
 
-    char current_section = '\0';
+    // Define a macro that prints to both the file and stdout.
+    #define PRINT_BOTH(fmt, ...) \
+        do { \
+            fprintf(fp, fmt, ##__VA_ARGS__); \
+            printf(fmt, ##__VA_ARGS__); \
+        } while (0)
+
     for (int i = 0; i < instructions->size; i++)
     {
         Line *line = &instructions->lines[i];
 
-        // If it's .code or .data, print without indentation
+        // If it's .code or .data, print without indentation.
         if (strcasecmp(line->opcode, ".code") == 0 || strcasecmp(line->opcode, ".data") == 0)
         {
-            fprintf(fp, "%s\n", line->opcode);
+            PRINT_BOTH("%s\n", line->opcode);
             continue;
         }
 
-        // Indent instructions with a tab
-        fprintf(fp, "\t");
+        // Indent instructions with a tab.
+        PRINT_BOTH("\t");
 
-        // Formatting based on instruction type
-        if ((strcasecmp(line->opcode, "addi") == 0 || strcasecmp(line->opcode, "subi") == 0) && line->operand_count == 2)
+        // Formatting based on instruction type.
+        if ((strcasecmp(line->opcode, "addi") == 0 || strcasecmp(line->opcode, "subi") == 0) &&
+            line->operand_count == 2)
         {
-            fprintf(fp, "%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
+            PRINT_BOTH("%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
         }
         else if (strcasecmp(line->opcode, "mov") == 0 && line->operand_count == 2)
         {
-            fprintf(fp, "mov %s, %s", line->operands[0], line->operands[1]);
+            PRINT_BOTH("mov %s, %s", line->operands[0], line->operands[1]);
         }
         else if (strcasecmp(line->opcode, "xor") == 0 && line->operand_count == 3)
         {
-            fprintf(fp, "xor %s, %s, %s", line->operands[0], line->operands[1], line->operands[2]);
+            PRINT_BOTH("xor %s, %s, %s", line->operands[0], line->operands[1], line->operands[2]);
         }
         else if (strcasecmp(line->opcode, "shftli") == 0 && line->operand_count == 2)
         {
-            fprintf(fp, "shftli %s, %s", line->operands[0], line->operands[1]);
+            PRINT_BOTH("shftli %s, %s", line->operands[0], line->operands[1]);
         }
         else if (strcasecmp(line->opcode, "st") == 0 || strcasecmp(line->opcode, "ld") == 0)
         {
-            fprintf(fp, "%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
-
+            PRINT_BOTH("%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
             if (line->operand_count == 3)
-                fprintf(fp, ", %s", line->operands[2]); // Print third operand if present
+                PRINT_BOTH(", %s", line->operands[2]);
         }
         else if (strcasecmp(line->opcode, "trap") == 0)
         {
-            fprintf(fp, "trap %s", line->operands[0]);
+            PRINT_BOTH("trap %s", line->operands[0]);
         }
         else if (strcasecmp(line->opcode, "br") == 0)
         {
             if (line->label[0] != '\0')
-                fprintf(fp, "br %s", line->label);
+                PRINT_BOTH("br %s", line->label);
             else
-                fprintf(fp, "br %s", line->operands[0]);
+                PRINT_BOTH("br %s", line->operands[0]);
         }
         else if (strcasecmp(line->opcode, "priv") == 0 && line->operand_count == 4)
         {
-            fprintf(fp, "priv %s, %s, %s, %s", line->operands[0], line->operands[1], line->operands[2], line->operands[3]);
+            PRINT_BOTH("priv %s, %s, %s, %s", line->operands[0],
+                       line->operands[1], line->operands[2], line->operands[3]);
         }
         else
         {
-            // General instruction format
-            fprintf(fp, "%s", line->opcode);
+            // General instruction format.
+            PRINT_BOTH("%s", line->opcode);
             for (int j = 0; j < line->operand_count; j++)
             {
                 if (j == 0)
-                    fprintf(fp, " %s", line->operands[j]);
+                    PRINT_BOTH(" %s", line->operands[j]);
                 else
-                    fprintf(fp, ", %s", line->operands[j]);
+                    PRINT_BOTH(", %s", line->operands[j]);
             }
         }
 
-        // Add a newline after each instruction
-        fprintf(fp, "\n");
+        // Add a newline after each instruction.
+        PRINT_BOTH("\n");
     }
+
+    #undef PRINT_BOTH
 
     fclose(fp);
 }
