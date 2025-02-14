@@ -229,6 +229,7 @@ unsigned int hex_to_decimal(const char *hex_str)
 // Assemble a single instruction line into a 32-bit binary string.
 // Fields: [opcode (5)][rd (5)][rs (5)][rt (5)][immediate (12)] (unused fields are zero).
 
+
 char *assemble_instruction(const char *line)
 {
     char *result = malloc(33);
@@ -256,6 +257,8 @@ char *assemble_instruction(const char *line)
         return NULL;
 
     char *mnemonic = tokens[0];
+
+    printf("%s\n", mnemonic);
 
     // Special handling for "brr" (unchanged)
     if (strcasecmp(mnemonic, "brr") == 0)
@@ -402,7 +405,7 @@ char *assemble_instruction(const char *line)
     char rs_bin[6] = "00000";
     char rt_bin[6] = "00000";
     char imm_bin[13] = "000000000000";
-    
+
     if (strcmp(info->format, "R") == 0)
     {
         if (count != 4)
@@ -417,8 +420,6 @@ char *assemble_instruction(const char *line)
         int_to_bin_string(rd, 5, rd_bin);
         int_to_bin_string(rs, 5, rs_bin);
         int_to_bin_string(rt, 5, rt_bin);
-        sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, rt_bin, "000000000000");
-        return result;
     }
     else if (strcmp(info->format, "I") == 0)
     {
@@ -432,8 +433,6 @@ char *assemble_instruction(const char *line)
         int imm = atoi(tokens[2]);
         int_to_bin_string(rd, 5, rd_bin);
         immediate_to_bin_string(imm, 12, info->immediate_signed, imm_bin);
-        sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, "00000", "00000", imm_bin);
-        return result;
     }
     else if (strcmp(info->format, "R2") == 0)
     {
@@ -447,8 +446,6 @@ char *assemble_instruction(const char *line)
         int rs = parse_register(tokens[2]);
         int_to_bin_string(rd, 5, rd_bin);
         int_to_bin_string(rs, 5, rs_bin);
-        sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, "00000", "000000000000");
-        return result;
     }
     else if (strcmp(info->format, "U") == 0)
     {
@@ -460,8 +457,6 @@ char *assemble_instruction(const char *line)
         }
         int rd = parse_register(tokens[1]);
         int_to_bin_string(rd, 5, rd_bin);
-        sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, "00000", "00000", "000000000000");
-        return result;
     }
     else if (strcmp(info->format, "J") == 0)
     {
@@ -473,13 +468,10 @@ char *assemble_instruction(const char *line)
         }
         int imm = atoi(tokens[1]);
         immediate_to_bin_string(imm, 12, info->immediate_signed, imm_bin);
-        sprintf(result, "%s%s%s%s%s", opcode_bin, "00000", "00000", "00000", imm_bin);
-        return result;
     }
     else if (strcmp(info->format, "N") == 0)
     {
-        sprintf(result, "%s%s%s%s%s", opcode_bin, "00000", "00000", "00000", "000000000000");
-        return result;
+        // No operands.
     }
     else if (strcmp(info->format, "P") == 0)
     {
@@ -489,18 +481,36 @@ char *assemble_instruction(const char *line)
             free(result);
             return NULL;
         }
+
+        int opcode = info->opcode; // Get opcode from instruction struct
+        char opcode_bin[6];
+        int_to_bin_string(opcode, 5, opcode_bin);
+        fprintf(stderr, "opcode '%s' \n", opcode_bin);
+
         int rd = parse_register(tokens[1]);
         int rs = parse_register(tokens[2]);
         int rt = parse_register(tokens[3]);
-        int imm = atoi(tokens[4]);
-        char rd_bin_local[6], rs_bin_local[6], rt_bin_local[6], imm_bin_local[13];
-        int_to_bin_string(rd, 5, rd_bin_local);
-        int_to_bin_string(rs, 5, rs_bin_local);
-        int_to_bin_string(rt, 5, rt_bin_local);
-        immediate_to_bin_string(imm, 12, info->immediate_signed, imm_bin_local);
-        sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin_local, rs_bin_local, rt_bin_local, imm_bin_local);
+        unsigned int imm = hex_to_decimal(tokens[4]);
+
+        char rd_bin[6], rs_bin[6], rt_bin[6], imm_bin[13];
+
+        int_to_bin_string(rd, 5, rd_bin);
+        int_to_bin_string(rs, 5, rs_bin);
+        int_to_bin_string(rt, 5, rt_bin);
+        fprintf(stderr, "opcode '%s' \n", rd_bin);
+        fprintf(stderr, "opcode '%s' \n", rs_bin);
+
+        fprintf(stderr, "opcode '%s' \n", rt_bin);
+
+        immediate_to_bin_string(imm, 12, info->immediate_signed, imm_bin);
+        fprintf(stderr, "imm '%d' \n", imm);
+
+        sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, rt_bin, imm_bin);
+        fprintf(stderr, "result '%s' \n", result);
+
         return result;
     }
+
     else if (strcmp(info->format, "M1") == 0)
     {
         if (count != 4)
@@ -515,8 +525,6 @@ char *assemble_instruction(const char *line)
         int_to_bin_string(rd, 5, rd_bin);
         int_to_bin_string(rs, 5, rs_bin);
         immediate_to_bin_string(imm, 12, info->immediate_signed, imm_bin);
-        sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, "00000", imm_bin);
-        return result;
     }
     else
     {
@@ -524,6 +532,9 @@ char *assemble_instruction(const char *line)
         free(result);
         return NULL;
     }
+
+    sprintf(result, "%s%s%s%s%s", opcode_bin, rd_bin, rs_bin, rt_bin, imm_bin);
+    return result;
 }
 void ull_to_bin_string(unsigned long long value, int bits, char *dest)
 {
