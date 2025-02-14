@@ -17,7 +17,7 @@
     brr r0
     brr 8
     brnz r0, r1
-    call r0, r1, r2
+    call r0
     return
     brgt r0, r1, r2
     priv r0, r0, r0, 0x0

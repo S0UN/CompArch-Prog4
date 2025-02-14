@@ -82,6 +82,17 @@ uint64_t bitstr_to_uint64(char *bitstr)
     }
     return result;
 }
+
+void print_label_table(LabelTable *labels)
+{
+    LabelTable *entry, *tmp;
+    HASH_ITER(hh, labels, entry, tmp)
+    {
+        printf("Label: %s, Address: %d, in_code_section: %d\n",
+               entry->label, entry->address, entry->in_code_section);
+    }
+}
+
 // Look up an instruction by mnemonic (non-"mov" instructions).
 InstructionInfo *getInstructionInfo(const char *mnemonic)
 {
@@ -156,7 +167,6 @@ void ll_to_bin_string(long long value, int bits, char *dest)
     dest[bits] = '\0';
 }
 
-
 // Given a register token like "r2", return its integer number.
 int parse_register(const char *token)
 {
@@ -228,7 +238,6 @@ unsigned int hex_to_decimal(const char *hex_str)
 
 // Assemble a single instruction line into a 32-bit binary string.
 // Fields: [opcode (5)][rd (5)][rs (5)][rt (5)][immediate (12)] (unused fields are zero).
-
 
 char *assemble_instruction(const char *line)
 {
@@ -558,8 +567,7 @@ int main(int argc, char *argv[])
     ArrayList instructions;
     initialize_arraylist(&instructions);
     int address = 0x1000; // PC starts at 0x1000
-    LabelTable *labels = NULL;
-
+    
     // First pass: Collect labels.
     if (process_file_first_pass(argv[1], &labels, &address) != 0)
     {
@@ -641,25 +649,24 @@ int main(int argc, char *argv[])
                 free(bin_instr);
             }
         }
-   else if (mode == 2)
-{
-    // Read the input string as a 64-bit unsigned integer.
-    char* endptr;
-    unsigned long long value = strtoull(trimmed, &endptr, 0);
-    printf("%llu",value);
-    // Force 32-bit interpretation and sign-extension:
-    // Cast to a 32-bit signed integer so that 0x00000000FFFFFFFF becomes -1,
-    // then cast back to 64 bits (which sign-extends -1 to 0xFFFFFFFFFFFFFFFF).
-    int32_t temp = (int32_t)value;
-    value = (uint64_t)temp;
+        else if (mode == 2)
+        {
+            // Read the input string as a 64-bit unsigned integer.
+            char *endptr;
+            unsigned long long value = strtoull(trimmed, &endptr, 0);
+            printf("%llu", value);
+            // Force 32-bit interpretation and sign-extension:
+            // Cast to a 32-bit signed integer so that 0x00000000FFFFFFFF becomes -1,
+            // then cast back to 64 bits (which sign-extends -1 to 0xFFFFFFFFFFFFFFFF).
+            int32_t temp = (int32_t)value;
+            value = (uint64_t)temp;
 
-    char data_bin[65]; // 64 bits + null terminator.
-    
-    ll_to_bin_string(value, 64, data_bin);
-    uint64_t data = bitstr_to_uint64(data_bin);
-    fwrite(&data, sizeof(data), 1, fout);
-}
+            char data_bin[65]; // 64 bits + null terminator.
 
+            ll_to_bin_string(value, 64, data_bin);
+            uint64_t data = bitstr_to_uint64(data_bin);
+            fwrite(&data, sizeof(data), 1, fout);
+        }
     }
 
     fclose(fin);
@@ -1364,15 +1371,31 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
     if (line_entry->operands[1][0] == ':')
     {
         char lbl[20];
-        strcpy(lbl, line_entry->operands[1] + 1); // Remove the colon.
+        // Copy everything after the colon.
+        strcpy(lbl, line_entry->operands[1] + 1);
         trim_whitespace(lbl);
-        unsigned long long addr_val = (unsigned long long)get_label_address(labels, lbl);
-        if (addr_val == (unsigned long long)-1)
+
+        // Remove surrounding quotes if present.
+        if (lbl[0] == '\"' || lbl[0] == '\'')
+        {
+            memmove(lbl, lbl + 1, strlen(lbl));
+        }
+        size_t len = strlen(lbl);
+        if (len > 0 && (lbl[len - 1] == '\"' || lbl[len - 1] == '\''))
+        {
+            lbl[len - 1] = '\0';
+        }
+
+        printf("DEBUG: Looking up label: '%s'\n", lbl);
+        int addr = get_label_address(labels, lbl);
+
+        printf("ADRESS OF LABEL IS'%i'", addr);
+        if (addr == -1)
         {
             fprintf(stderr, "Undefined label: %s\n", lbl);
             exit(EXIT_FAILURE);
         }
-        value = addr_val;
+        value = addr;
     }
     else
     {
@@ -1619,6 +1642,11 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
             // Store the label in the label table.
 
             store_label(labels, tempLabel + 1, *address, in_code_section);
+            int stored_addr = get_label_address(*labels, tempLabel + 1);
+            printf("DEBUG: Stored Label -> %s at address %d (retrieved address: %d)\n",
+                   tempLabel + 1, *address, stored_addr);
+            print_label_table(*labels);
+
             printf("DEBUG: Stored Label -> %s at address %d\n", tempLabel + 1, *address);
         }
         else
