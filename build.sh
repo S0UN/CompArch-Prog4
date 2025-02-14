@@ -7,4 +7,4 @@ gcc -o hw4 -Iinclude src/arraylist.c src/label_table.c src/line.c src/syntax_ver
 mv hw4 "$(dirname "$0")"
 
 # Make the executable runnable
-chmod +x hw4
+chmod +x hw5
