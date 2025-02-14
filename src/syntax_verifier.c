@@ -1028,6 +1028,7 @@ bool validate_macro_instruction(const char *line)
 
 bool validate_instruction(const char *line)
 {
+    return;
     char opcode[20];
     char *operands[4];
     int operandCount = 0;
@@ -1067,16 +1068,16 @@ bool validate_instruction(const char *line)
                 error("Arithmetic instructions: all operands must be registers");
         }
     }
-    // else if (strcasecmp(opcode, "addi") == 0 ||
-    //          strcasecmp(opcode, "subi") == 0)
-    // {
-    //     if (operandCount != 2)
-    //         error("Immediate arithmetic instructions require two operands (rd, imm)");
-    //     if (!isValidRegister(operands[0]))
-    //         error("addi/subi: first operand must be a register");
-    //     if (!isValidImmediate(operands[1], false, 12))
-    //         error("addi/subi: second operand must be a 12-bit unsigned immediate");
-    // }
+    else if (strcasecmp(opcode, "addi") == 0 ||
+             strcasecmp(opcode, "subi") == 0)
+    {
+        if (operandCount != 2)
+            error("Immediate arithmetic instructions require two operands (rd, imm)");
+        if (!isValidRegister(operands[0]))
+            error("addi/subi: first operand must be a register");
+        if (!isValidImmediate(operands[1], false, 12))
+            error("addi/subi: second operand must be a 12-bit unsigned immediate");
+    }
     else if (strcasecmp(opcode, "xor") == 0 ||
              strcasecmp(opcode, "and") == 0 ||
              strcasecmp(opcode, "or") == 0)
