@@ -780,7 +780,7 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
     new_entry1.program_counter = (*address);
     new_entry1.type = 'I';
     add_to_arraylist(instruction_list, new_entry1);
-    (*address) += 4;
+   // (*address) += 4;
 
     Line new_entry2;
     memset(&new_entry2, 0, sizeof(Line));
