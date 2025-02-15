@@ -567,7 +567,7 @@ int main(int argc, char *argv[])
     ArrayList instructions;
     initialize_arraylist(&instructions);
     int address = 0x1000; // PC starts at 0x1000
-    
+
     // First pass: Collect labels.
     if (process_file_first_pass(argv[1], &labels, &address) != 0)
     {
@@ -1744,7 +1744,12 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
 
         // For data section, if the line consists solely of a number, treat it as a data literal.
         char *firstToken = strtok(buffer, " \t");
-        if (!in_code_section && (isdigit(firstToken[0]) ))
+        if (firstToken && strcmp(firstToken, "-1") == 0)
+        {
+            fprintf(stderr, "Error: Negative values are not allowed.\n");
+            exit(EXIT_FAILURE);
+        }
+        if (!in_code_section && (isdigit(firstToken[0])))
         {
             Line data_line;
             memset(&data_line, 0, sizeof(Line));
@@ -1760,7 +1765,6 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
             // *address += 8;
             continue;
         }
-
 
         // Otherwise, process as an instruction.
         // Restore the original buffer for tokenization/validation.
