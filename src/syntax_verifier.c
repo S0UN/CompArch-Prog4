@@ -567,7 +567,7 @@ int main(int argc, char *argv[])
     ArrayList instructions;
     initialize_arraylist(&instructions);
     int address = 0x1000; // PC starts at 0x1000
-
+    
     // First pass: Collect labels.
     if (process_file_first_pass(argv[1], &labels, &address) != 0)
     {
@@ -1028,7 +1028,6 @@ bool validate_macro_instruction(const char *line)
 
 bool validate_instruction(const char *line)
 {
-    return;
     char opcode[20];
     char *operands[4];
     int operandCount = 0;
