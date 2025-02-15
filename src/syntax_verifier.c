@@ -16,8 +16,6 @@ LabelTable *labels = NULL;
 #include <string.h>
 #include <ctype.h>
 #include <stdint.h>
-#include <errno.h>
-#include <limits.h>
 
 #define MAX_LINE 256
 
@@ -651,37 +649,29 @@ int main(int argc, char *argv[])
                 free(bin_instr);
             }
         }
-      
-else if (mode == 2)
+    else if (mode == 2)
 {
-    // For the data section, we expect an unsigned 64-bit number.
-    // First, check that the input does not start with a '-' (no negatives allowed).
+    // Ensure that the string does not represent a negative number.
     if (trimmed[0] == '-') {
-        fprintf(stderr, "Error: Data value cannot be negative: %s\n", trimmed);
+        fprintf(stderr, "Error: Data value must be unsigned: %s\n", trimmed);
+        exit(EXIT_FAILURE);
+    }
+
+    unsigned long long value;
+    if (sscanf(trimmed, "%llu", &value) != 1) {
+        fprintf(stderr, "Error: Invalid unsigned 64-bit integer: %s\n", trimmed);
         exit(EXIT_FAILURE);
     }
     
-    errno = 0;  // Reset errno before conversion.
-    char *endptr;
-    unsigned long long value = strtoull(trimmed, &endptr, 0);
-    if (errno == ERANGE) {
-        fprintf(stderr, "Error: Data value out of range for unsigned 64-bit: %s\n", trimmed);
-        exit(EXIT_FAILURE);
-    }
-    if (*endptr != '\0') {
-        fprintf(stderr, "Error: Invalid characters in data value: %s\n", trimmed);
-        exit(EXIT_FAILURE);
-    }
-    
-    // Convert the 64-bit unsigned value to a binary string.
-    char data_bin[65]; // 64 bits + null terminator.
+    // Now convert the 64-bit unsigned value to a binary string.
+    char data_bin[65]; // 64 bits plus the null terminator.
     ull_to_bin_string(value, 64, data_bin);
     
-    // For completeness, if you want to convert back from the binary string (though
-    // you already have 'value'), you can do so:
+    // Convert the binary string back into a uint64_t (if needed).
     uint64_t data = bitstr_to_uint64(data_bin);
     fwrite(&data, sizeof(data), 1, fout);
 }
+
     }
 
     fclose(fin);
