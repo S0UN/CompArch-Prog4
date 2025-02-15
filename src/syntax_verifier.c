@@ -1744,7 +1744,7 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
 
         // For data section, if the line consists solely of a number, treat it as a data literal.
         char *firstToken = strtok(buffer, " \t");
-        if (!in_code_section && (isdigit(firstToken[0]) && firstToken[0] != '-'))
+        if (!in_code_section && (isdigit(firstToken[0]) ))
         {
             Line data_line;
             memset(&data_line, 0, sizeof(Line));
@@ -1759,10 +1759,6 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
             add_to_arraylist(lines, data_line);
             // *address += 8;
             continue;
-        }
-        if(firstToken[0] != '-'){
-                    exit(EXIT_FAILURE);
-
         }
 
 
