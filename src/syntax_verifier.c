@@ -1744,41 +1744,25 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
 
         // For data section, if the line consists solely of a number, treat it as a data literal.
         char *firstToken = strtok(buffer, " \t");
-  if (!in_code_section && (isdigit(firstToken[0]) || firstToken[0] == '-'))
-{
-    Line data_line;
-    memset(&data_line, 0, sizeof(Line));
-    data_line.program_counter = *address;
-    data_line.size = 8; // Data items take 8 bytes.
-    data_line.type = 'D';
+        if (!in_code_section && (isdigit(firstToken[0]) && firstToken[0] != '-'))
+        {
+            Line data_line;
+            memset(&data_line, 0, sizeof(Line));
+            data_line.program_counter = *address;
+            data_line.size = 8; // Data items take 8 bytes.
+            data_line.type = 'D';
+            // Save the literal as an integer value.
+            data_line.literal = (unsigned int)strtoul(firstToken, NULL, 0);
+            // Store the literal as text in the opcode field (so we can print it).
+            snprintf(data_line.opcode, sizeof(data_line.opcode), "%d", data_line.literal);
+            data_line.operand_count = 0;
+            add_to_arraylist(lines, data_line);
+            // *address += 8;
+            continue;
+        }else{
+                    exit(EXIT_FAILURE);
 
-    // Convert string to long long to check for negatives
-    char *endptr;
-    long long value = strtoll(firstToken, &endptr, 0);
-
-    // Check if the value is negative
-    if (value < 0)
-    {
-        fprintf(stderr, "Error: Negative values are not allowed in the .data section: %lld\n", value);
-        exit(EXIT_FAILURE);
-    }
-
-    // Ensure value does not exceed unsigned 64-bit range
-    if ((unsigned long long)value > UINT64_MAX)
-    {
-        fprintf(stderr, "Error: Value exceeds maximum allowed range for 64-bit unsigned integer: %llu\n", (unsigned long long)value);
-        exit(EXIT_FAILURE);
-    }
-
-    // Store the literal as an unsigned integer value
-    data_line.literal = (unsigned long long)value;
-
-    // Store the literal as text in the opcode field (so we can print it)
-    //snprintf(data_line.opcode, sizeof(data_line.opcode), "%llu", data_line.literal);
-    data_line.operand_count = 0;
-    add_to_arraylist(lines, data_line);
-    continue;
-}
+        }
 
 
         // Otherwise, process as an instruction.
