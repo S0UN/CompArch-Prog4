@@ -1606,6 +1606,11 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
     {
         remove_comments(buffer);
         trim_whitespace(buffer);
+           if (strchr(buffer, '-') != NULL)
+        {
+            fprintf(stderr, "Error: Negative values are not allowed anywhere in the line.\n");
+            exit(1);
+        }
         if (strlen(buffer) == 0)
             continue;
 
@@ -1632,6 +1637,7 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
                 fclose(fp);
                 return 1;
             }
+
 
             // Trim the label first.
             char tempLabel[50];
@@ -1744,10 +1750,11 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
 
         // For data section, if the line consists solely of a number, treat it as a data literal.
         char *firstToken = strtok(buffer, " \t");
-     if (firstToken && firstToken[0] == '-') {
-    fprintf(stderr, "Error: Negative values are not allowed.\n");
-    exit(1);
-}
+        if (firstToken && firstToken[0] == '-')
+        {
+            fprintf(stderr, "Error: Negative values are not allowed.\n");
+            exit(1);
+        }
 
         if (!in_code_section && (isdigit(firstToken[0])))
         {
@@ -1772,11 +1779,12 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
         remove_comments(buffer);
         trim_whitespace(buffer);
 
-// Check if there's a '-' anywhere in the line
-if (strchr(original_buffer, '-') != NULL) {
-    fprintf(stderr, "Error: Negative values are not allowed anywhere in the line.\n");
-    exit(1);
-}
+        // Check if there's a '-' anywhere in the line
+        if (strchr(original_buffer, '-') != NULL)
+        {
+            fprintf(stderr, "Error: Negative values are not allowed anywhere in the line.\n");
+            exit(1);
+        }
         char *token = strtok(buffer, " \t");
         if (!token)
         {
