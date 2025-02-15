@@ -1744,11 +1744,11 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
 
         // For data section, if the line consists solely of a number, treat it as a data literal.
         char *firstToken = strtok(buffer, " \t");
-        if (firstToken && strcmp(firstToken, "-1") == 0)
-        {
-            fprintf(stderr, "Error: Negative values are not allowed.\n");
-            exit(1);
-        }
+     if (firstToken && firstToken[0] == '-') {
+    fprintf(stderr, "Error: Negative values are not allowed.\n");
+    exit(1);
+}
+
         if (!in_code_section && (isdigit(firstToken[0])))
         {
             Line data_line;
