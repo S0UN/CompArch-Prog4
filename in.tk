@@ -1,12 +1,2 @@
-:L1
-.code
-    add r1, r2, r3
-    addi r4, 10
-:L2
-    ld r5, :L3
 .data
-:L3
-    42
-    99
-.code
-    out r1, r5
+    -1

@@ -1747,7 +1747,7 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
         if (firstToken && strcmp(firstToken, "-1") == 0)
         {
             fprintf(stderr, "Error: Negative values are not allowed.\n");
-            exit(EXIT_FAILURE);
+            exit(1);
         }
         if (!in_code_section && (isdigit(firstToken[0])))
         {
