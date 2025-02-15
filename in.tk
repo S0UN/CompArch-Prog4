@@ -3,9 +3,9 @@
     in r0, r1
 .code 
     add r0, r1, r2
-    addi r9, :L2
-
- 
+    addi r9, 9
+    ld r0, :L1
+    ld r9, :L2
 .data
     9
     29

@@ -16,6 +16,8 @@ LabelTable *labels = NULL;
 #include <string.h>
 #include <ctype.h>
 #include <stdint.h>
+#include <errno.h>
+#include <limits.h>
 
 #define MAX_LINE 256
 
@@ -649,24 +651,37 @@ int main(int argc, char *argv[])
                 free(bin_instr);
             }
         }
-        else if (mode == 2)
-        {
-            // Read the input string as a 64-bit unsigned integer.
-            char *endptr;
-            unsigned long long value = strtoull(trimmed, &endptr, 0);
-            printf("%llu", value);
-            // Force 32-bit interpretation and sign-extension:
-            // Cast to a 32-bit signed integer so that 0x00000000FFFFFFFF becomes -1,
-            // then cast back to 64 bits (which sign-extends -1 to 0xFFFFFFFFFFFFFFFF).
-            int32_t temp = (int32_t)value;
-            value = (uint64_t)temp;
-
-            char data_bin[65]; // 64 bits + null terminator.
-
-            ll_to_bin_string(value, 64, data_bin);
-            uint64_t data = bitstr_to_uint64(data_bin);
-            fwrite(&data, sizeof(data), 1, fout);
-        }
+      
+else if (mode == 2)
+{
+    // For the data section, we expect an unsigned 64-bit number.
+    // First, check that the input does not start with a '-' (no negatives allowed).
+    if (trimmed[0] == '-') {
+        fprintf(stderr, "Error: Data value cannot be negative: %s\n", trimmed);
+        exit(EXIT_FAILURE);
+    }
+    
+    errno = 0;  // Reset errno before conversion.
+    char *endptr;
+    unsigned long long value = strtoull(trimmed, &endptr, 0);
+    if (errno == ERANGE) {
+        fprintf(stderr, "Error: Data value out of range for unsigned 64-bit: %s\n", trimmed);
+        exit(EXIT_FAILURE);
+    }
+    if (*endptr != '\0') {
+        fprintf(stderr, "Error: Invalid characters in data value: %s\n", trimmed);
+        exit(EXIT_FAILURE);
+    }
+    
+    // Convert the 64-bit unsigned value to a binary string.
+    char data_bin[65]; // 64 bits + null terminator.
+    ull_to_bin_string(value, 64, data_bin);
+    
+    // For completeness, if you want to convert back from the binary string (though
+    // you already have 'value'), you can do so:
+    uint64_t data = bitstr_to_uint64(data_bin);
+    fwrite(&data, sizeof(data), 1, fout);
+}
     }
 
     fclose(fin);
