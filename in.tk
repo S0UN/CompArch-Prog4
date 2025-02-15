@@ -1,19 +1,12 @@
 :L1
 .code
-    in r0, r1
-.code 
-    add r0, r1, r2
-    addi r9, 9
-    ld r0, :L1
-    ld r9, :L2
-.data
-    9
-    29
-    8
-.code
-    in r0, r1
+    add r1, r2, r3
+    addi r4, 10
 :L2
-    out r0, r1
-.data 
-    8
-    9
+    ld r5, :L3
+.data
+:L3
+    42
+    99
+.code
+    out r1, r5

@@ -649,29 +649,24 @@ int main(int argc, char *argv[])
                 free(bin_instr);
             }
         }
-    else if (mode == 2)
-{
-    // Ensure that the string does not represent a negative number.
-    if (trimmed[0] == '-') {
-        fprintf(stderr, "Error: Data value must be unsigned: %s\n", trimmed);
-        exit(EXIT_FAILURE);
-    }
+        else if (mode == 2)
+        {
+            // Read the input string as a 64-bit unsigned integer.
+            char *endptr;
+            unsigned long long value = strtoull(trimmed, &endptr, 0);
+            printf("%llu", value);
+            // Force 32-bit interpretation and sign-extension:
+            // Cast to a 32-bit signed integer so that 0x00000000FFFFFFFF becomes -1,
+            // then cast back to 64 bits (which sign-extends -1 to 0xFFFFFFFFFFFFFFFF).
+            int32_t temp = (int32_t)value;
+            value = (uint64_t)temp;
 
-    unsigned long long value;
-    if (sscanf(trimmed, "%llu", &value) != 1) {
-        fprintf(stderr, "Error: Invalid unsigned 64-bit integer: %s\n", trimmed);
-        exit(EXIT_FAILURE);
-    }
-    
-    // Now convert the 64-bit unsigned value to a binary string.
-    char data_bin[65]; // 64 bits plus the null terminator.
-    ull_to_bin_string(value, 64, data_bin);
-    
-    // Convert the binary string back into a uint64_t (if needed).
-    uint64_t data = bitstr_to_uint64(data_bin);
-    fwrite(&data, sizeof(data), 1, fout);
-}
+            char data_bin[65]; // 64 bits + null terminator.
 
+            ll_to_bin_string(value, 64, data_bin);
+            uint64_t data = bitstr_to_uint64(data_bin);
+            fwrite(&data, sizeof(data), 1, fout);
+        }
     }
 
     fclose(fin);
@@ -1749,22 +1744,42 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
 
         // For data section, if the line consists solely of a number, treat it as a data literal.
         char *firstToken = strtok(buffer, " \t");
-        if (!in_code_section && (isdigit(firstToken[0]) || firstToken[0] == '-'))
-        {
-            Line data_line;
-            memset(&data_line, 0, sizeof(Line));
-            data_line.program_counter = *address;
-            data_line.size = 8; // Data items take 8 bytes.
-            data_line.type = 'D';
-            // Save the literal as an integer value.
-            data_line.literal = (unsigned int)strtoul(firstToken, NULL, 0);
-            // Store the literal as text in the opcode field (so we can print it).
-            snprintf(data_line.opcode, sizeof(data_line.opcode), "%d", data_line.literal);
-            data_line.operand_count = 0;
-            add_to_arraylist(lines, data_line);
-            // *address += 8;
-            continue;
-        }
+  if (!in_code_section && (isdigit(firstToken[0]) || firstToken[0] == '-'))
+{
+    Line data_line;
+    memset(&data_line, 0, sizeof(Line));
+    data_line.program_counter = *address;
+    data_line.size = 8; // Data items take 8 bytes.
+    data_line.type = 'D';
+
+    // Convert string to long long to check for negatives
+    char *endptr;
+    long long value = strtoll(firstToken, &endptr, 0);
+
+    // Check if the value is negative
+    if (value < 0)
+    {
+        fprintf(stderr, "Error: Negative values are not allowed in the .data section: %lld\n", value);
+        exit(EXIT_FAILURE);
+    }
+
+    // Ensure value does not exceed unsigned 64-bit range
+    if ((unsigned long long)value > UINT64_MAX)
+    {
+        fprintf(stderr, "Error: Value exceeds maximum allowed range for 64-bit unsigned integer: %llu\n", (unsigned long long)value);
+        exit(EXIT_FAILURE);
+    }
+
+    // Store the literal as an unsigned integer value
+    data_line.literal = (unsigned long long)value;
+
+    // Store the literal as text in the opcode field (so we can print it)
+    //snprintf(data_line.opcode, sizeof(data_line.opcode), "%llu", data_line.literal);
+    data_line.operand_count = 0;
+    add_to_arraylist(lines, data_line);
+    continue;
+}
+
 
         // Otherwise, process as an instruction.
         // Restore the original buffer for tokenization/validation.

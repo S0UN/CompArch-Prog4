@@ -1,7 +1,6 @@
 .code
-	priv r0, r1, r0, 0x3
-	add r0, r1, r2
-	addi r9, 9
+	add r0, r1, r3
+	sub r0, r3, r4
 	xor r0, r0, r0
 	addi r0, 0
 	shftli r0, 12
@@ -11,28 +10,12 @@
 	shftli r0, 12
 	addi r0, 0
 	shftli r0, 12
-	addi r0, 256
+	addi r0, 260
 	shftli r0, 4
-	addi r0, 0
-	xor r9, r9, r9
-	addi r9, 0
-	shftli r9, 12
-	addi r9, 0
-	shftli r9, 12
-	addi r9, 0
-	shftli r9, 12
-	addi r9, 0
-	shftli r9, 12
-	addi r9, 264
-	shftli r9, 4
-	addi r9, 8
-.data
-	9
-	29
-	8
-.code
-	priv r0, r1, r0, 0x3
-	priv r0, r1, r0, 0x4
-.data 
-	8
-	9
+	addi r0, 8
+	add r0, r1, r3
+	sub r0, r3, r4
+	add r0, r1, r3
+	sub r0, r3, r4
+	add r0, r1, r3
+	sub r0, r3, r4
