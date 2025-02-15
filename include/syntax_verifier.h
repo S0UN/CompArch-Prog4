@@ -2,7 +2,6 @@
 #define SYNTAX_VERIFIER_H
 
 #include <stdbool.h> // Add this line
-#include <cerrno>
 
 #include "arraylist.h"
 #include "label_table.h"
