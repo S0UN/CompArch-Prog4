@@ -1759,7 +1759,8 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
             add_to_arraylist(lines, data_line);
             // *address += 8;
             continue;
-        }else{
+        }
+        if(firstToken[0] != '-'){
                     exit(EXIT_FAILURE);
 
         }
