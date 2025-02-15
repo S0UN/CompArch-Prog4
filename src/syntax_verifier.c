@@ -1772,6 +1772,11 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
         remove_comments(buffer);
         trim_whitespace(buffer);
 
+// Check if there's a '-' anywhere in the line
+if (strchr(original_buffer, '-') != NULL) {
+    fprintf(stderr, "Error: Negative values are not allowed anywhere in the line.\n");
+    exit(1);
+}
         char *token = strtok(buffer, " \t");
         if (!token)
         {
