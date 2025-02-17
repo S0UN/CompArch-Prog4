@@ -655,9 +655,6 @@ int main(int argc, char *argv[])
             char *endptr;
             unsigned long long value = strtoull(trimmed, &endptr, 0);
             printf("%llu", value);
-            // Force 32-bit interpretation and sign-extension:
-            // Cast to a 32-bit signed integer so that 0x00000000FFFFFFFF becomes -1,
-            // then cast back to 64 bits (which sign-extends -1 to 0xFFFFFFFFFFFFFFFF).
             int32_t temp = (int32_t)value;
             value = (uint64_t)temp;
 
