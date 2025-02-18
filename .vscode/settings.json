@@ -4,6 +4,7 @@
         "label_table.h": "c",
         "strings.h": "c",
         "stdint.h": "c",
-        "errno.h": "c"
+        "errno.h": "c",
+        "arraylist.h": "c"
     }
 }
