@@ -54,7 +54,7 @@ InstructionInfo instructions[] = {
     {"mulf", 0x16, "R", 0},
     {"divf", 0x17, "R", 0},
     {"ld", 0x20, "I", 0}, // ld rd, L => unsigned immediate
-    {NULL, 0, NULL, 0}};
+    {NULL, 0, NULL, 0};
 
 // Helper: Convert a 32-character bit string into a uint32_t.
 uint32_t bitstr_to_uint32(char *bitstr)
