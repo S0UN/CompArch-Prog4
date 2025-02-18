@@ -1,3 +1,8 @@
-.data
-    -12143
+.code
+    add 1
+    br L1
+
+L1:
+.code  
+    add 2
  

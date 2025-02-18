@@ -7,15 +7,12 @@
 #include "arraylist.h"
 #include "label_table.h"
 #include "line.h"
+
 #define MAX_OPERAND_LENGTH 32
 
 LabelTable *labels = NULL;
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <ctype.h>
-#include <stdint.h>
+
 
 #define MAX_LINE 256
 
