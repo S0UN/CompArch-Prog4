@@ -295,16 +295,28 @@ void secondPass(char *memory, uint64_t *registers)
     bool halted = false;
     while (!halted)
     {
- 
+        
+
         if (pc + 4 > MEM)
         {
             fprintf(stderr, "Simulation error: PC out of bounds\n");
+            exit(1);
+        }
+      
+          if (pc < START_ADDRESS)
+        {
+            fprintf(stderr, "Simulation error: PC underflow\n");
             exit(1);
         }
         // Check: Ensure PC is 4-byte aligned
         if (pc % 4 != 0)
         {
             fprintf(stderr, "Simulation error: Unaligned PC\n");
+            exit(1);
+        }
+             if (pc < START_ADDRESS)
+        {
+            fprintf(stderr, "Simulation error: PC underflow\n");
             exit(1);
         }
         // Fetch 4-byte instruction (little-endian)
@@ -317,7 +329,11 @@ void secondPass(char *memory, uint64_t *registers)
         uint64_t L = instruction & 0xFFF;
         // Default next PC is pc + 4
         uint64_t next_pc = pc + 4;
-
+     if (pc < START_ADDRESS)
+        {
+            fprintf(stderr, "Simulation error: PC underflow\n");
+            exit(1);
+        }
         switch (opcode)
         {
         // Arithmetic
@@ -423,13 +439,18 @@ void secondPass(char *memory, uint64_t *registers)
             fprintf(stderr, "Simulation error: Unknown opcode 0x%X\n", opcode);
             exit(1);
         }
-       if (next_pc < START_ADDRESS)
+        if (next_pc < START_ADDRESS)
+        {
+            fprintf(stderr, "Simulation error: PC underflow\n");
+            exit(1);
+        }
+          if (pc < START_ADDRESS)
         {
             fprintf(stderr, "Simulation error: PC underflow\n");
             exit(1);
         }
         pc = next_pc;
- 
+      
     }
 }
 
