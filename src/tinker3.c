@@ -170,13 +170,13 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *registers, char *me
     // Returns true if the simulation should halt.
     switch (L)
     {
-    case 0x0: // Halt
+    case 0x0: 
         return true;
-    case 0x1: // Trap (no-op)
+    case 0x1: 
         break;
-    case 0x2: // RTE (no-op)
+    case 0x2: 
         break;
-    case 0x3: // Input: rd ← Input[rs] (only if register rs equals 0 = keyboard)
+    case 0x3: 
         if (registers[rs] == 0)
         {
             if (scanf("%lu", &registers[rd]) != 1)
@@ -186,15 +186,14 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *registers, char *me
             }
         }
         break;
-    case 0x4: // Output: if register rd == 1 then output registers[rs]
+    case 0x4: 
         if (registers[rd] == 1)
         {
-            printf("%llu", registers[rs]);
+            printf("%lu", registers[rs]);
             fflush(stdout);
         }
         break;
     default:
-        //fprintf(stderr, "Simulation error: Illegal priv instruction with L = 0x%lx\n", L);
         exit(1);
     }
     return false;
@@ -409,6 +408,7 @@ void secondPass(char *memory, uint64_t *registers)
         pc = next_pc;
     }
 }
+
 int main(int argc, char *argv[])
 {
     if (argc < 2)
@@ -432,11 +432,10 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // For this simulation, you may need to initialize register 31 differently.
-    // Here, we simply set it to point to memory as before.
+    // Initialize stack pointer (R31) to point to the top of memory (or use another appropriate value)
     registers[31] = (uint64_t)memory;
 
-    FILE *file = fopen(argv[1], "rb"); // Use the binary file passed as an argument
+    FILE *file = fopen(argv[1], "rb");
     if (file == NULL)
     {
         fprintf(stderr, "Error opening file: %s\n", argv[1]);
@@ -445,12 +444,14 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // Adjust firstRead parameters as needed; here, we assume 4-byte reads.
+    // Load the binary file into memory starting at START_ADDRESS.
     firstRead(memory, 4, 1, file);
-
     fclose(file);
+
+    // Now call secondPass to simulate execution of the loaded instructions.
+    secondPass(memory, registers);
+
     free(memory);
     free(registers);
-
     return 0;
 }
