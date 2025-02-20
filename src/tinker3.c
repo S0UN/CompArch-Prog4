@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <strings.h>
 #include <stdint.h>
+#include <inttypes.h>
+
 #define MEM (512 * 1024)
 #define NUM_REGISTERS 32
 #define START_ADDRESS 0x1000
@@ -177,7 +179,7 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *registers, char *me
     case 0x3: // Input: rd ← Input[rs] (only if register rs equals 0 = keyboard)
         if (registers[rs] == 0)
         {
-            if (scanf("%llu", &registers[rd]) != 1)
+            if (scanf("%lu", &registers[rd]) != 1)
             {
                 fprintf(stderr, "Simulation error: Failed to read input\n");
                 exit(1);
