@@ -295,12 +295,7 @@ void secondPass(char *memory, uint64_t *registers)
     bool halted = false;
     while (!halted)
     {
-        // Added Check: Ensure PC is not underflowed before fetching instruction
-        if (pc < START_ADDRESS)
-        {
-            fprintf(stderr, "Simulation error: PC underflow\n");
-            exit(1);
-        }
+ 
         if (pc + 4 > MEM)
         {
             fprintf(stderr, "Simulation error: PC out of bounds\n");
@@ -433,7 +428,19 @@ void secondPass(char *memory, uint64_t *registers)
             fprintf(stderr, "Simulation error: PC underflow\n");
             exit(1);
         }
+               // Added Check: Ensure PC is not underflowed before fetching instruction
+        if (pc < START_ADDRESS)
+        {
+            fprintf(stderr, "Simulation error: PC underflow\n");
+            exit(1);
+        }
         pc = next_pc;
+               // Added Check: Ensure PC is not underflowed before fetching instruction
+        if (pc < START_ADDRESS)
+        {
+            fprintf(stderr, "Simulation error: PC underflow\n");
+            exit(1);
+        }
     }
 }
 
