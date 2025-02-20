@@ -278,18 +278,8 @@ void firstRead(void *ptr, size_t size, size_t count, FILE *file)
 {
     size_t bytesRead;
     uint64_t programCounter = START_ADDRESS;
-              if (programCounter < START_ADDRESS)
-        {
-            fprintf(stderr, "Simulation error: PC underflow\n");
-            exit(1);
-        }
     while ((bytesRead = fread((char *)ptr + programCounter, size, count, file)) > 0)
     {
-             if (programCounter < START_ADDRESS)
-        {
-            fprintf(stderr, "Simulation error: PC underflow\n");
-            exit(1);
-        }
         programCounter += 4;
         if (programCounter + 4 > MEM)
         {
@@ -302,31 +292,20 @@ void firstRead(void *ptr, size_t size, size_t count, FILE *file)
 void secondPass(char *memory, uint64_t *registers)
 {
     uint64_t pc = START_ADDRESS;
+    uint64_t start = START_ADDRESS;
     bool halted = false;
     while (!halted)
     {
-        
 
         if (pc + 4 > MEM)
         {
             fprintf(stderr, "Simulation error: PC out of bounds\n");
             exit(1);
         }
-      
-          if (pc < START_ADDRESS)
-        {
-            fprintf(stderr, "Simulation error: PC underflow\n");
-            exit(1);
-        }
         // Check: Ensure PC is 4-byte aligned
         if (pc % 4 != 0)
         {
             fprintf(stderr, "Simulation error: Unaligned PC\n");
-            exit(1);
-        }
-             if (pc < START_ADDRESS)
-        {
-            fprintf(stderr, "Simulation error: PC underflow\n");
             exit(1);
         }
         // Fetch 4-byte instruction (little-endian)
@@ -339,11 +318,7 @@ void secondPass(char *memory, uint64_t *registers)
         uint64_t L = instruction & 0xFFF;
         // Default next PC is pc + 4
         uint64_t next_pc = pc + 4;
-     if (pc < START_ADDRESS)
-        {
-            fprintf(stderr, "Simulation error: PC underflow\n");
-            exit(1);
-        }
+
         switch (opcode)
         {
         // Arithmetic
@@ -449,18 +424,14 @@ void secondPass(char *memory, uint64_t *registers)
             fprintf(stderr, "Simulation error: Unknown opcode 0x%X\n", opcode);
             exit(1);
         }
-        if (next_pc < START_ADDRESS)
-        {
-            fprintf(stderr, "Simulation error: PC underflow\n");
-            exit(1);
-        }
-          if (pc < START_ADDRESS)
-        {
-            fprintf(stderr, "Simulation error: PC underflow\n");
-            exit(1);
-        }
+
         pc = next_pc;
-      
+
+        if (pc < start)
+        {
+            fprintf(stderr, "Simulation error: PC underflow\n");
+            exit(1);
+        }
     }
 }
 
