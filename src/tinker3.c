@@ -164,10 +164,9 @@ void exec_brgt(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers, uint64_t
     // Otherwise, new_pc remains unchanged (caller will add 4)
 }
 
-// priv
+// Privileged Instruction
 bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *registers, char *memory, uint64_t *pc)
 {
-    // Returns true if the simulation should halt.
     switch (L)
     {
     case 0x0: 
@@ -179,7 +178,7 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *registers, char *me
     case 0x3: 
         if (registers[rs] == 0)
         {
-            if (scanf("%lu", &registers[rd]) != 1)
+            if (scanf("%" SCNu64, &registers[rd]) != 1)
             {
                 fprintf(stderr, "Simulation error: Failed to read input\n");
                 exit(1);
@@ -189,7 +188,7 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *registers, char *me
     case 0x4: 
         if (registers[rd] == 1)
         {
-            printf("%lu", registers[rs]);
+            printf("%" PRIu64, registers[rs]);
             fflush(stdout);
         }
         break;
@@ -204,6 +203,11 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *registers, char *me
 void exec_mov_mem(uint8_t rd, uint8_t rs, uint64_t L, char *memory, uint64_t *registers)
 {
     uint64_t addr = registers[rs] + L;
+    if (addr % 8 != 0)
+    {
+        fprintf(stderr, "Simulation error: Unaligned memory access\n");
+        exit(1);
+    }
     if (addr + 8 > MEM)
     {
         fprintf(stderr, "Simulation error: Memory access out of bounds\n");
@@ -223,6 +227,11 @@ void exec_mov_L(uint8_t rd, uint64_t L, uint64_t *registers)
 void exec_store_mem(uint8_t rd, uint64_t L, uint8_t rs, char *memory, uint64_t *registers)
 {
     uint64_t addr = registers[rd] + L;
+    if (addr % 8 != 0)
+    {
+        fprintf(stderr, "Simulation error: Unaligned memory access\n");
+        exit(1);
+    }
     if (addr + 8 > MEM)
     {
         fprintf(stderr, "Simulation error: Memory access out of bounds\n");
@@ -277,6 +286,7 @@ void firstRead(void *ptr, size_t size, size_t count, FILE *file)
         }
     }
 }
+
 void secondPass(char *memory, uint64_t *registers)
 {
     uint64_t pc = START_ADDRESS;
@@ -286,6 +296,12 @@ void secondPass(char *memory, uint64_t *registers)
         if (pc + 4 > MEM)
         {
             fprintf(stderr, "Simulation error: PC out of bounds\n");
+            exit(1);
+        }
+        // *** Added Check: Ensure PC is 4-byte aligned ***
+        if (pc % 4 != 0)
+        {
+            fprintf(stderr, "Simulation error: Unaligned PC\n");
             exit(1);
         }
         // Fetch 4-byte instruction (little-endian)
@@ -405,15 +421,21 @@ void secondPass(char *memory, uint64_t *registers)
             fprintf(stderr, "Simulation error: Unknown opcode 0x%X\n", opcode);
             exit(1);
         }
+        // *** Added Check: Ensure next_pc is not below START_ADDRESS (underflow) ***
+        if (next_pc < START_ADDRESS) {
+            fprintf(stderr, "Simulation error: PC underflow\n");
+            exit(1);
+        }
         pc = next_pc;
     }
 }
 
 int main(int argc, char *argv[])
 {
+    // *** Modified Check: If no file provided, print exactly "Invalid tinker filepath" ***
     if (argc < 2)
     {
-        fprintf(stderr, "Usage: %s <binary_file>\n", argv[0]);
+        fprintf(stderr, "Invalid tinker filepath\n");
         return 1;
     }
 
@@ -438,7 +460,7 @@ int main(int argc, char *argv[])
     FILE *file = fopen(argv[1], "rb");
     if (file == NULL)
     {
-        fprintf(stderr, "Error opening file: %s\n", argv[1]);
+        fprintf(stderr, "Invalid tinker filepath\n");
         free(memory);
         free(registers);
         return 1;
