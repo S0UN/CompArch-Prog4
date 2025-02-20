@@ -3,7 +3,7 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include <strings.h>
-
+#include <stdint.h>
 #define MEM (512 * 1024)
 #define NUM_REGISTERS 32
 #define START_ADDRESS 0x1000
