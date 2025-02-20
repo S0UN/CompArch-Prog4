@@ -278,8 +278,18 @@ void firstRead(void *ptr, size_t size, size_t count, FILE *file)
 {
     size_t bytesRead;
     uint64_t programCounter = START_ADDRESS;
+              if (programCounter < START_ADDRESS)
+        {
+            fprintf(stderr, "Simulation error: PC underflow\n");
+            exit(1);
+        }
     while ((bytesRead = fread((char *)ptr + programCounter, size, count, file)) > 0)
     {
+             if (programCounter < START_ADDRESS)
+        {
+            fprintf(stderr, "Simulation error: PC underflow\n");
+            exit(1);
+        }
         programCounter += 4;
         if (programCounter + 4 > MEM)
         {
