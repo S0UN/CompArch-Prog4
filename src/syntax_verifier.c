@@ -25,7 +25,6 @@ typedef struct
 } InstructionInfo;
 
 // Instruction set – 30 instructions as specified.
-// (Note: all mov instructions in the file will be given as "mov" and are handled specially below.)
 InstructionInfo instructions[] = {
     {"add", 0x18, "R", 0},
     {"addi", 0x19, "I", 0}, // unsigned immediate
@@ -42,18 +41,15 @@ InstructionInfo instructions[] = {
     {"shftl", 0x6, "R", 0},
     {"shftli", 0x7, "I", 0}, // unsigned immediate
     {"br", 0x8, "U", 0},
-    // "brr" is ambiguous – see special handling below.
     {"brnz", 0xb, "R2", 0},
     {"call", 0xc, "U", 0},
     {"return", 0xd, "N", 0},
     {"brgt", 0xe, "R", 0},
     {"priv", 0xf, "P", 1}, // assume its immediate is signed
-    {"ld", 0x20, "I", 0},  // ld rd, L => unsigned immediate
     {"addf", 0x14, "R", 0},
     {"subf", 0x15, "R", 0},
     {"mulf", 0x16, "R", 0},
     {"divf", 0x17, "R", 0},
-    {"ld", 0x20, "I", 0}, // ld rd, L => unsigned immediate
     {NULL, 0, NULL, 0}};
 
 // Helper: Convert a 32-character bit string into a uint32_t.

@@ -1,139 +1,265 @@
-#include "syntax_verifier.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <stdbool.h>
 #include <strings.h>
-#include "arraylist.h"
-#include "label_table.h"
-#include "line.h"
 
 #define MEM (512 * 1024)
 #define NUM_REGISTERS 32
-#define START_ADDRESS 1000
+#define START_ADDRESS 0x1000
 
 // Integer Arithmetic Instructions
-void add(uint64_t *rd, uint64_t rs, uint64_t rt)
+void exec_add(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
-    *rd = rs + rt;
+    registers[rd] = registers[rs] + registers[rt];
 }
-void addi(uint64_t *rd, uint64_t L)
+void exec_addi(uint8_t rd, uint64_t L, uint64_t *registers)
 {
-    *rd = *rd + L;
+    registers[rd] += L;
 }
-void sub(uint64_t *rd, uint64_t rs, uint64_t rt)
+void exec_sub(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
-    *rd = rs - rt;
+    registers[rd] = registers[rs] - registers[rt];
 }
-void subi(uint64_t *rd, uint64_t L)
+void exec_subi(uint8_t rd, uint64_t L, uint64_t *registers)
 {
-    *rd = *rd - L;
+    registers[rd] -= L;
 }
-void mul(uint64_t *rd, uint64_t rs, uint64_t rt)
+void exec_mul(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
-    *rd = rs * rt;
+    registers[rd] = registers[rs] * registers[rt];
 }
-void div_(uint64_t *rd, uint64_t rs, uint64_t rt)
+void exec_div(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
-    *rd = rs / rt;
+    if (registers[rt] == 0)
+    {
+        fprintf(stderr, "Simulation error: Division by zero\n");
+        exit(1);
+    }
+    registers[rd] = registers[rs] / registers[rt];
 }
 
 // Logic Instructions
-void and_(uint64_t *rd, uint64_t rs, uint64_t rt)
+
+void exec_and(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
-    *rd = rs & rt;
+    registers[rd] = registers[rs] & registers[rt];
 }
-void or_(uint64_t *rd, uint64_t rs, uint64_t rt)
+void exec_or(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
-    *rd = rs | rt;
+    registers[rd] = registers[rs] | registers[rt];
 }
-void xor_(uint64_t *rd, uint64_t rs, uint64_t rt)
+void exec_xor(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
-    *rd = rs ^ rt;
+    registers[rd] = registers[rs] ^ registers[rt];
 }
-void not_(uint64_t *rd, uint64_t rs)
+void exec_not(uint8_t rd, uint8_t rs, uint64_t *registers)
 {
-    *rd = ~rs;
+    registers[rd] = ~registers[rs];
 }
-void shftr(uint64_t *rd, uint64_t rs, uint64_t rt)
+void exec_shftr(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
-    *rd = rs >> rt;
+    registers[rd] = registers[rs] >> registers[rt];
 }
-void shftri(uint64_t *rd, uint64_t L)
+void exec_shftri(uint8_t rd, uint64_t L, uint64_t *registers)
 {
-    *rd = *rd >> L;
+    registers[rd] = registers[rd] >> L;
 }
-void shftl(uint64_t *rd, uint64_t rs, uint64_t rt)
+void exec_shftl(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
-    *rd = rs << rt;
+    registers[rd] = registers[rs] << registers[rt];
 }
-void shftli(uint64_t *rd, uint64_t L)
+void exec_shftli(uint8_t rd, uint64_t L, uint64_t *registers)
 {
-    *rd = *rd << L;
+    registers[rd] = registers[rd] << L;
 }
 
 // Control Instructions
-void br(uint64_t *pc, uint64_t rd)
+
+void exec_br(uint8_t rd, uint64_t *registers, uint64_t *new_pc)
 {
-    *pc = rd;
+    if (registers[rd] >= MEM)
+    {
+        fprintf(stderr, "Simulation error: Branch target out of bounds\n");
+        exit(1);
+    }
+    *new_pc = registers[rd];
 }
-void brr(uint64_t *pc, uint64_t rd)
+void exec_brr(uint8_t rd, uint64_t current_pc, uint64_t *registers, uint64_t *new_pc)
 {
-    *pc += rd;
+    if (current_pc + registers[rd] >= MEM)
+    {
+        fprintf(stderr, "Simulation error: Branch target out of bounds\n");
+        exit(1);
+    }
+    *new_pc = current_pc + registers[rd];
 }
-void brr_L(uint64_t *pc, int64_t L)
+void exec_brrL(uint64_t L, uint64_t current_pc, uint64_t *new_pc)
 {
-    *pc += L;
+    int32_t offset = (int32_t)L;
+    if (offset & 0x800)
+    { // sign-extend 12-bit value
+        offset |= 0xFFFFF000;
+    }
+    if (current_pc + offset >= MEM)
+    {
+        fprintf(stderr, "Simulation error: Branch target out of bounds\n");
+        exit(1);
+    }
+    *new_pc = current_pc + offset;
 }
-void brnz(uint64_t *pc, uint64_t rd, uint64_t rs)
+void exec_brnz(uint8_t rd, uint8_t rs, uint64_t current_pc, uint64_t *registers, uint64_t *new_pc)
 {
-    *pc = (rs != 0) ? rd : (*pc + 4);
+    if (registers[rs] != 0)
+    {
+        if (registers[rd] >= MEM)
+        {
+            fprintf(stderr, "Simulation error: Branch target out of bounds\n");
+            exit(1);
+        }
+        *new_pc = registers[rd];
+    }
+    // Otherwise, new_pc remains current_pc + 4
 }
-void call(uint64_t *pc, uint64_t *stack, uint64_t rd)
+void exec_call(uint8_t rd, char *memory, uint64_t *registers, uint64_t current_pc, uint64_t *new_pc)
 {
-    stack[-1] = *pc + 4;
-    *pc = rd;
+    // Decrement stack pointer by 8 (simulate push)
+    if (registers[31] < 8)
+    {
+        fprintf(stderr, "Simulation error: Stack underflow\n");
+        exit(1);
+    }
+    registers[31] -= 8;
+    if (registers[31] + 8 > MEM)
+    {
+        fprintf(stderr, "Simulation error: Stack pointer out of bounds\n");
+        exit(1);
+    }
+    *((uint64_t *)(memory + registers[31])) = current_pc + 4;
+    *new_pc = registers[rd];
 }
-void return_(uint64_t *pc, uint64_t *stack)
+void exec_return(char *memory, uint64_t *registers, uint64_t *new_pc)
 {
-    *pc = stack[-1];
+    if (registers[31] > MEM - 8)
+    {
+        fprintf(stderr, "Simulation error: Stack underflow\n");
+        exit(1);
+    }
+    *new_pc = *((uint64_t *)(memory + registers[31]));
+    registers[31] += 8;
 }
-void brgt(uint64_t *pc, uint64_t rd, uint64_t rs, uint64_t rt)
+void exec_brgt(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers, uint64_t *new_pc)
 {
-    *pc = (rs > rt) ? rd : (*pc + 4);
+    if ((int64_t)registers[rs] > (int64_t)registers[rt])
+    {
+        if (registers[rd] >= MEM)
+        {
+            fprintf(stderr, "Simulation error: Branch target out of bounds\n");
+            exit(1);
+        }
+        *new_pc = registers[rd];
+    }
+    // Otherwise, new_pc remains unchanged (caller will add 4)
+}
+
+// priv
+bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *registers, char *memory, uint64_t *pc)
+{
+    // Returns true if the simulation should halt.
+    switch (L)
+    {
+    case 0x0: // Halt
+        return true;
+    case 0x1: // Trap (no-op)
+        break;
+    case 0x2: // RTE (no-op)
+        break;
+    case 0x3: // Input: rd ← Input[rs] (only if register rs equals 0 = keyboard)
+        if (registers[rs] == 0)
+        {
+            if (scanf("%llu", &registers[rd]) != 1)
+            {
+                fprintf(stderr, "Simulation error: Failed to read input\n");
+                exit(1);
+            }
+        }
+        break;
+    case 0x4: // Output: if register rd == 1 then output registers[rs]
+        if (registers[rd] == 1)
+        {
+            printf("%llu", registers[rs]);
+            fflush(stdout);
+        }
+        break;
+    default:
+        //fprintf(stderr, "Simulation error: Illegal priv instruction with L = 0x%lx\n", L);
+        exit(1);
+    }
+    return false;
 }
 
 // Data Movement Instructions
-void mov(uint64_t *rd, uint64_t rs)
+
+void exec_mov_mem(uint8_t rd, uint8_t rs, uint64_t L, char *memory, uint64_t *registers)
 {
-    *rd = rs;
+    uint64_t addr = registers[rs] + L;
+    if (addr + 8 > MEM)
+    {
+        fprintf(stderr, "Simulation error: Memory access out of bounds\n");
+        exit(1);
+    }
+    registers[rd] = *((uint64_t *)(memory + addr));
 }
-void mov_L(uint64_t *rd, uint64_t L) { *rd = (*rd & ~(0xFFF << 52)) | (L << 52); }
-void mov_mem(uint64_t *rd, uint64_t *mem, uint64_t rs, uint64_t L)
+void exec_mov_reg(uint8_t rd, uint8_t rs, uint64_t *registers)
 {
-    *rd = mem[rs + L];
+    registers[rd] = registers[rs];
 }
-void store_mem(uint64_t *mem, uint64_t rd, uint64_t rs, uint64_t L)
+void exec_mov_L(uint8_t rd, uint64_t L, uint64_t *registers)
 {
-    mem[rd + L] = rs;
+    registers[rd] &= ~((uint64_t)0xFFF << 52);
+    registers[rd] |= (L << 52);
+}
+void exec_store_mem(uint8_t rd, uint64_t L, uint8_t rs, char *memory, uint64_t *registers)
+{
+    uint64_t addr = registers[rd] + L;
+    if (addr + 8 > MEM)
+    {
+        fprintf(stderr, "Simulation error: Memory access out of bounds\n");
+        exit(1);
+    }
+    *((uint64_t *)(memory + addr)) = registers[rs];
 }
 
 // Floating Point Instructions
-void addf(double *rd, double rs, double rt)
+
+void exec_addf(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
-    *rd = rs + rt;
+    double a = *((double *)&registers[rs]);
+    double b = *((double *)&registers[rt]);
+    *((double *)&registers[rd]) = a + b;
 }
-void subf(double *rd, double rs, double rt)
+void exec_subf(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
-    *rd = rs - rt;
+    double a = *((double *)&registers[rs]);
+    double b = *((double *)&registers[rt]);
+    *((double *)&registers[rd]) = a - b;
 }
-void mulf(double *rd, double rs, double rt)
+void exec_mulf(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
-    *rd = rs * rt;
+    double a = *((double *)&registers[rs]);
+    double b = *((double *)&registers[rt]);
+    *((double *)&registers[rd]) = a * b;
 }
-void divf(double *rd, double rs, double rt)
+void exec_divf(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
-    *rd = rs / rt;
+    double b = *((double *)&registers[rt]);
+    if (b == 0.0)
+    {
+        fprintf(stderr, "Simulation error: Division by zero (floating point)\n");
+        exit(1);
+    }
+    double a = *((double *)&registers[rs]);
+    *((double *)&registers[rd]) = a / b;
 }
 
 void firstRead(void *ptr, size_t size, size_t count, FILE *file)
@@ -143,93 +269,181 @@ void firstRead(void *ptr, size_t size, size_t count, FILE *file)
     while ((bytesRead = fread((char *)ptr + programCounter, size, count, file)) > 0)
     {
         programCounter += 4;
+        if (programCounter + 4 > MEM)
+        {
+            fprintf(stderr, "Simulation error: Program too large for memory\n");
+            exit(1);
+        }
     }
 }
 void secondPass(char *memory, uint64_t *registers)
 {
-    uint64_t programCounter = START_ADDRESS;
-    while (memory[programCounter] != NULL)
+    uint64_t pc = START_ADDRESS;
+    bool halted = false;
+    while (!halted)
     {
-        uint32_t instruction = *((uint32_t *)(memory + programCounter));
-
-        // Print instruction in binary
-        printf("Instruction (Binary): ");
-        printBinary(instruction);
-        printf("\n");
-
-        uint8_t opcode = (instruction >> 27) & 0x1F; // Extract first 5 bits (0-4)
-        uint8_t rd = (instruction >> 22) & 0x1F;    // Extract bits 5-9
-        uint8_t rs = (instruction >> 17) & 0x1F;    // Extract bits 10-14
-        uint8_t rt = (instruction >> 12) & 0x1F;    // Extract bits 15-19
-        uint16_t L = instruction & 0xFFF;          // Extract bits 20-31
+        if (pc + 4 > MEM)
+        {
+            fprintf(stderr, "Simulation error: PC out of bounds\n");
+            exit(1);
+        }
+        // Fetch 4-byte instruction (little-endian)
+        uint32_t instruction = *((uint32_t *)(memory + pc));
+        // Decode fields
+        uint8_t opcode = (instruction >> 27) & 0x1F;
+        uint8_t rd = (instruction >> 22) & 0x1F;
+        uint8_t rs = (instruction >> 17) & 0x1F;
+        uint8_t rt = (instruction >> 12) & 0x1F;
+        uint64_t L = instruction & 0xFFF;
+        // Default next PC is pc + 4
+        uint64_t next_pc = pc + 4;
 
         switch (opcode)
         {
+        // Arithmetic
         case 0x18:
-            printf("ADD Instruction: rd=%u, rs=%u, rt=%u\n", rd, rs, rt);
+            exec_add(rd, rs, rt, registers);
             break;
         case 0x19:
-            printf("ADDI Instruction: rd=%u, L=%u\n", rd, L);
+            exec_addi(rd, L, registers);
             break;
         case 0x1A:
-            printf("SUB Instruction: rd=%u, rs=%u, rt=%u\n", rd, rs, rt);
+            exec_sub(rd, rs, rt, registers);
             break;
         case 0x1B:
-            printf("SUBI Instruction: rd=%u, L=%u\n", rd, L);
+            exec_subi(rd, L, registers);
             break;
         case 0x1C:
-            printf("MUL Instruction: rd=%u, rs=%u, rt=%u\n", rd, rs, rt);
+            exec_mul(rd, rs, rt, registers);
             break;
         case 0x1D:
-            printf("DIV Instruction: rd=%u, rs=%u, rt=%u\n", rd, rs, rt);
+            exec_div(rd, rs, rt, registers);
             break;
+        // Logical
         case 0x00:
-            printf("AND Instruction: rd=%u, rs=%u, rt=%u\n", rd, rs, rt);
+            exec_and(rd, rs, rt, registers);
             break;
         case 0x01:
-            printf("OR Instruction: rd=%u, rs=%u, rt=%u\n", rd, rs, rt);
+            exec_or(rd, rs, rt, registers);
             break;
         case 0x02:
-            printf("XOR Instruction: rd=%u, rs=%u, rt=%u\n", rd, rs, rt);
+            exec_xor(rd, rs, rt, registers);
             break;
         case 0x03:
-            printf("NOT Instruction: rd=%u, rs=%u\n", rd, rs);
+            exec_not(rd, rs, registers);
             break;
-        default:
-            printf("Unknown opcode: 0x%X\n", opcode);
+        case 0x04:
+            exec_shftr(rd, rs, rt, registers);
             break;
-        }
+        case 0x05:
+            exec_shftri(rd, L, registers);
+            break;
+        case 0x06:
+            exec_shftl(rd, rs, rt, registers);
+            break;
+        case 0x07:
+            exec_shftli(rd, L, registers);
+            break;
+        // Control
+        case 0x08:
+            exec_br(rd, registers, &next_pc);
+            break;
+        case 0x09:
+            exec_brr(rd, pc, registers, &next_pc);
+            break;
+        case 0x0A:
+            exec_brrL(L, pc, &next_pc);
+            break;
+        case 0x0B:
+            exec_brnz(rd, rs, pc, registers, &next_pc);
+            break;
+        case 0x0C:
+            exec_call(rd, memory, registers, pc, &next_pc);
+            break;
+        case 0x0D:
+            exec_return(memory, registers, &next_pc);
+            break;
+        case 0x0E:
+            exec_brgt(rd, rs, rt, registers, &next_pc);
+            break;
+        // Privileged
+        case 0x0F:
+            if (exec_priv(L, rd, rs, registers, memory, &pc))
+            {
+                halted = true;
+            }
+            break;
+        // Floating point
+        case 0x14:
+            exec_addf(rd, rs, rt, registers);
+            break;
+        case 0x15:
+            exec_subf(rd, rs, rt, registers);
+            break;
+        case 0x16:
+            exec_mulf(rd, rs, rt, registers);
+            break;
+        case 0x17:
+            exec_divf(rd, rs, rt, registers);
+            break;
+        // Data Movement
+        case 0x10:
+            exec_mov_mem(rd, rs, L, memory, registers);
+            break;
+        case 0x11:
+            exec_mov_reg(rd, rs, registers);
+            break;
+        case 0x12:
+            exec_mov_L(rd, L, registers);
+            break;
+        case 0x13:
+            exec_store_mem(rd, L, rs, memory, registers);
+            break;
 
-        programCounter += 4; // Move to the next instruction (4-byte aligned)
+        default:
+            fprintf(stderr, "Simulation error: Unknown opcode 0x%X\n", opcode);
+            exit(1);
+        }
+        pc = next_pc;
     }
 }
-
 int main(int argc, char *argv[])
 {
+    if (argc < 2)
+    {
+        fprintf(stderr, "Usage: %s <binary_file>\n", argv[0]);
+        return 1;
+    }
+
     char *memory = (char *)calloc(MEM, sizeof(char));
     if (memory == NULL)
     {
-        printf("Memory allocation failed \n");
+        fprintf(stderr, "Memory allocation failed\n");
         return 1;
     }
 
     uint64_t *registers = (uint64_t *)calloc(NUM_REGISTERS, sizeof(uint64_t));
-
     if (registers == NULL)
     {
-        printf("Memory allocation failed!\n");
+        fprintf(stderr, "Memory allocation failed!\n");
+        free(memory);
         return 1;
     }
 
+    // For this simulation, you may need to initialize register 31 differently.
+    // Here, we simply set it to point to memory as before.
     registers[31] = (uint64_t)memory;
 
-    FILE *file = fopen("data.bin", "rb"); // Change this to be the actual binary file
+    FILE *file = fopen(argv[1], "rb"); // Use the binary file passed as an argument
     if (file == NULL)
     {
-        printf("Error opening file\n");
+        fprintf(stderr, "Error opening file: %s\n", argv[1]);
+        free(memory);
+        free(registers);
         return 1;
     }
 
+    // Adjust firstRead parameters as needed; here, we assume 4-byte reads.
     firstRead(memory, 4, 1, file);
 
     fclose(file);
