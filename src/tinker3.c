@@ -89,12 +89,13 @@ void exec_br(uint8_t rd, uint64_t *registers, uint64_t *new_pc)
 }
 void exec_brr(uint8_t rd, uint64_t current_pc, uint64_t *registers, uint64_t *new_pc)
 {
-    if (current_pc + registers[rd] >= MEM)
+    uint64_t target = current_pc + registers[rd];
+    if (target >= MEM || target < START_ADDRESS)
     {
         fprintf(stderr, "Simulation error: Branch target out of bounds\n");
         exit(1);
     }
-    *new_pc = current_pc + registers[rd];
+    *new_pc = target;
 }
 void exec_brrL(uint64_t L, uint64_t current_pc, uint64_t *new_pc)
 {
@@ -103,18 +104,19 @@ void exec_brrL(uint64_t L, uint64_t current_pc, uint64_t *new_pc)
     { // sign-extend 12-bit value
         offset |= 0xFFFFF000;
     }
-    if (current_pc + offset >= MEM)
+    uint64_t target = current_pc + offset;
+    if (target >= MEM || target < START_ADDRESS)
     {
         fprintf(stderr, "Simulation error: Branch target out of bounds\n");
         exit(1);
     }
-    *new_pc = current_pc + offset;
+    *new_pc = target;
 }
 void exec_brnz(uint8_t rd, uint8_t rs, uint64_t current_pc, uint64_t *registers, uint64_t *new_pc)
 {
     if (registers[rs] != 0)
     {
-        if (registers[rd] >= MEM)
+        if (registers[rd] >= MEM || registers[rd] < START_ADDRESS)
         {
             fprintf(stderr, "Simulation error: Branch target out of bounds\n");
             exit(1);
@@ -154,7 +156,7 @@ void exec_brgt(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers, uint64_t
 {
     if ((int64_t)registers[rs] > (int64_t)registers[rt])
     {
-        if (registers[rd] >= MEM)
+        if (registers[rd] >= MEM || registers[rd] < START_ADDRESS)
         {
             fprintf(stderr, "Simulation error: Branch target out of bounds\n");
             exit(1);
@@ -169,13 +171,13 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *registers, char *me
 {
     switch (L)
     {
-    case 0x0: 
+    case 0x0:
         return true;
-    case 0x1: 
+    case 0x1:
         break;
-    case 0x2: 
+    case 0x2:
         break;
-    case 0x3: 
+    case 0x3:
         if (registers[rs] == 0)
         {
             if (scanf("%" SCNu64, &registers[rd]) != 1)
@@ -185,7 +187,7 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *registers, char *me
             }
         }
         break;
-    case 0x4: 
+    case 0x4:
         if (registers[rd] == 1)
         {
             printf("%" PRIu64, registers[rs]);
@@ -293,12 +295,18 @@ void secondPass(char *memory, uint64_t *registers)
     bool halted = false;
     while (!halted)
     {
+        // Added Check: Ensure PC is not underflowed before fetching instruction
+        if (pc < START_ADDRESS)
+        {
+            fprintf(stderr, "Simulation error: PC underflow\n");
+            exit(1);
+        }
         if (pc + 4 > MEM)
         {
             fprintf(stderr, "Simulation error: PC out of bounds\n");
             exit(1);
         }
-        // *** Added Check: Ensure PC is 4-byte aligned ***
+        // Check: Ensure PC is 4-byte aligned
         if (pc % 4 != 0)
         {
             fprintf(stderr, "Simulation error: Unaligned PC\n");
@@ -416,12 +424,11 @@ void secondPass(char *memory, uint64_t *registers)
         case 0x13:
             exec_store_mem(rd, L, rs, memory, registers);
             break;
-
         default:
             fprintf(stderr, "Simulation error: Unknown opcode 0x%X\n", opcode);
             exit(1);
         }
-        // *** Added Check: Ensure next_pc is not below START_ADDRESS (underflow) ***
+        // Added Check: Ensure next_pc is not below START_ADDRESS (underflow)
         if (next_pc < START_ADDRESS) {
             fprintf(stderr, "Simulation error: PC underflow\n");
             exit(1);
@@ -432,7 +439,7 @@ void secondPass(char *memory, uint64_t *registers)
 
 int main(int argc, char *argv[])
 {
-    // *** Modified Check: If no file provided, print exactly "Invalid tinker filepath" ***
+    // Modified Check: If no file provided, print exactly "Invalid tinker filepath"
     if (argc < 2)
     {
         fprintf(stderr, "Invalid tinker filepath\n");
@@ -454,7 +461,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // Initialize stack pointer (R31) to point to the top of memory (or use another appropriate value)
+    // Initialize stack pointer (R31) to point to the top of memory
     registers[31] = (uint64_t)memory;
 
     FILE *file = fopen(argv[1], "rb");
