@@ -424,7 +424,7 @@ void secondPass(char *memory, uint64_t *registers)
             fprintf(stderr, "Simulation error: Unknown opcode 0x%X\n", opcode);
             exit(1);
         }
-    if (new_pc   < start)
+    if (next_pc   < start)
         {
             fprintf(stderr, "Simulation error: PC underflow\n");
             exit(1);
