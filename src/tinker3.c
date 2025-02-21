@@ -246,20 +246,32 @@ uint64_t mov_rl(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
 //    then write the 64-bit value from register[rs] into that memory location.
 //    Return pc+4.
 //
-uint64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, char *memory, uint64_t *registers)
+int64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, 
+                char *memory, uint64_t *registers)
 {
-    uint16_t lit = literal & 0xFFF;
-    int64_t offset = (lit & 0x800) ? ((int64_t)lit | 0xFFFFFFFFFFFFF000ULL) : lit;
+    // 1) Restrict to 12 bits, then check if the sign bit (bit 11) is set.
+    uint16_t lit12 = literal & 0xFFF; 
+    int64_t offset = (lit12 & 0x800) 
+        ? ((int64_t)lit12 | 0xFFFFFFFFFFFFF000ULL)  // sign-extend negative
+        : (int64_t)lit12;                           // or just use as positive
+
+    // 2) Compute effective address using rd as the base register.
     uint64_t address = registers[rd] + offset;
 
-    if (address % 8 != 0)
+    // 3) (Optional but common) Check alignment and in-bounds conditions.
+    if (address % 8 != 0 || address + 8 > MEM)
     {
         fprintf(stderr, "Simulation error: Memory access out of bounds\n");
         exit(1);
     }
+
+    // 4) Write register rs into memory at that address.
     *((uint64_t *)(memory + address)) = registers[rs];
+
+    // 5) Return the next PC (pc + 4).
     return pc + 4;
 }
+
 
 // Floating Point Instructions
 void exec_addf(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
