@@ -201,48 +201,59 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *registers, char *me
 }
 
 // Data Movement Instructions
-void exec_mov_mem(uint8_t rd, uint8_t rs, uint64_t L, char *memory, uint64_t *registers)
+uint64_t mov_rm(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, char *memory, uint64_t *registers)
 {
-    int64_t offset = (L & 0x800) ? ((int64_t)L | 0xFFFFFFFFFFFFF000LL) : L;
-    uint64_t addr = registers[rd] + offset;
-    if (addr % 8 != 0)
-    {
-        fprintf(stderr, "Simulation error: Unaligned memory access\n");
-        exit(1);
-    }
-    if (addr + 8 > MEM)
+    int64_t offset = (literal & 0x800) ? ((int64_t)literal | 0xFFFFFFFFFFFFF000ULL) : literal;
+    uint64_t address = registers[rs] + offset;
+    if (address % 8 != 0 || address + 8 > MEM)
     {
         fprintf(stderr, "Simulation error: Memory access out of bounds\n");
         exit(1);
     }
-    registers[rs] = *((uint64_t *)(memory + addr));
-}
-void exec_mov_reg(uint8_t rd, uint8_t rs, uint64_t *registers)
-{
-    registers[rd] = registers[rs];
-}
-void exec_mov_L(uint8_t rd, uint64_t L, uint64_t *registers)
-{
-    uint64_t mask = 0xFFF;
-    registers[rd] = (registers[rd] & ~mask) | (L & mask);
-}
-void exec_store_mem(uint8_t rd, uint64_t L, uint8_t rs, char *memory, uint64_t *registers)
-{
-    int64_t offset = (L & 0x800) ? ((int64_t)L | 0xFFFFFFFFFFFFF000LL) : L;
-    uint64_t addr = registers[rd] + offset;
-    if (addr % 8 != 0)
-    {
-        fprintf(stderr, "Simulation error: Unaligned memory access\n");
-        exit(1);
-    }
-    if (addr + 8 > MEM)
-    {
-        fprintf(stderr, "Simulation error: Memory access out of bounds\n");
-        exit(1);
-    }
-    *((uint64_t *)(memory + addr)) = registers[rs];
+    registers[rd] = *((uint64_t *)(memory + address));
+    return pc + 4;
 }
 
+//
+// mov_rr: Register-to-register
+//    Simply copy register[rs] into register[rd] and return pc+4.
+//
+uint64_t mov_rr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, uint64_t *registers)
+{
+    registers[rd] = registers[rs];
+    return pc + 4;
+}
+
+//
+// mov_rl: Register literal modification
+//    Use a mask of 0xFFF on the current value of register[rd] and OR in the literal (masked to 12 bits).
+//    Return pc+4.
+//
+uint64_t mov_rl(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, uint64_t *registers)
+{
+    uint64_t mask = 0xFFF;
+    registers[rd] = (registers[rd] & ~mask) | (literal & mask);
+    return pc + 4;
+}
+
+//
+// mov_mr: Register-to-memory
+//    Sign-extend the 12-bit literal, add it to register[rd] (as base) to compute the effective address,
+//    then write the 64-bit value from register[rs] into that memory location.
+//    Return pc+4.
+//
+uint64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, char *memory, uint64_t *registers)
+{
+    int64_t offset = (literal & 0x800) ? ((int64_t)literal | 0xFFFFFFFFFFFFF000ULL) : literal;
+    uint64_t address = registers[rd] + offset;
+    if (address % 8 != 0 || address + 8 > MEM)
+    {
+        fprintf(stderr, "Simulation error: Memory access out of bounds\n");
+        exit(1);
+    }
+    *((uint64_t *)(memory + address)) = registers[rs];
+    return pc + 4;
+}
 
 // Floating Point Instructions
 
