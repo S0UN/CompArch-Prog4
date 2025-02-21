@@ -201,10 +201,10 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *registers, char *me
 }
 
 // Data Movement Instructions
-
 void exec_mov_mem(uint8_t rd, uint8_t rs, uint64_t L, char *memory, uint64_t *registers)
 {
-    uint64_t addr = registers[rs] + L;
+    int64_t offset = (L & 0x800) ? ((int64_t)L | 0xFFFFFFFFFFFFF000LL) : L;
+    uint64_t addr = registers[rs] + offset;
     if (addr % 8 != 0)
     {
         fprintf(stderr, "Simulation error: Unaligned memory access\n");
@@ -223,12 +223,13 @@ void exec_mov_reg(uint8_t rd, uint8_t rs, uint64_t *registers)
 }
 void exec_mov_L(uint8_t rd, uint64_t L, uint64_t *registers)
 {
-    registers[rd] &= ~((uint64_t)0xFFF << 52);
-    registers[rd] |= (L << 52);
+    uint64_t mask = 0xFFF;
+    registers[rd] = (registers[rd] & ~mask) | (L & mask);
 }
 void exec_store_mem(uint8_t rd, uint64_t L, uint8_t rs, char *memory, uint64_t *registers)
 {
-    uint64_t addr = registers[rd] + L;
+    int64_t offset = (L & 0x800) ? ((int64_t)L | 0xFFFFFFFFFFFFF000LL) : L;
+    uint64_t addr = registers[rd] + offset;
     if (addr % 8 != 0)
     {
         fprintf(stderr, "Simulation error: Unaligned memory access\n");
@@ -241,6 +242,7 @@ void exec_store_mem(uint8_t rd, uint64_t L, uint8_t rs, char *memory, uint64_t *
     }
     *((uint64_t *)(memory + addr)) = registers[rs];
 }
+
 
 // Floating Point Instructions
 
