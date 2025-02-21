@@ -242,9 +242,6 @@ uint64_t mov_rm(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
 {
     int64_t offset = (literal & 0x800) ? ((int64_t)literal | 0xFFFFFFFFFFFFF000ULL) : literal;
     uint64_t address = r[rs] + offset;
-     if (address < START_ADDRESS ) {
-        error("Attempt to write outside code bounds.");
-    }
 
     r[rd] = read(address);
     return pc + 4;
@@ -260,7 +257,6 @@ uint64_t mov_rl(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
 {
     uint64_t mask = 0xFFF;
     r[rd] = (r[rd] & ~mask) | (literal & mask);
-
     return pc + 4;
 }
 // mov_mr: Register-to-memory
@@ -271,8 +267,9 @@ uint64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
                          ? ((int64_t)lit12 | 0xFFFFFFFFFFFFF000ULL)
                          : (int64_t)lit12;
     uint64_t address = r[rd] + offset;
- if (address < START_ADDRESS ) {
-        error("Attempt to write outside code bounds.");
+
+   if (address % 8 != 0) {
+        error("Memory must be 8-byte aligned.");
     }
     mem_write(address, r[rs]);
     return pc + 4;
