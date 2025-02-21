@@ -225,7 +225,7 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *pc)
     case 0x4:
         if (r[rd] == 1)
         {
-    printf("%lu\n", r[rs]);  // Notice the '\n'
+    printf("%" PRIu64 "\n", r[rs]);  // add newline
             fflush(stdout);
         }
         break;
