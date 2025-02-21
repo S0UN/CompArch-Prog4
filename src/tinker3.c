@@ -223,42 +223,40 @@ uint64_t mov_rl(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
     return pc + 4;
 }
 
-int64_t mov_mr(uint64_t pc,
-               uint8_t rd,
-               uint8_t rs,
-               uint8_t rt,
-               uint16_t literal,
-               char *memory,
-               uint64_t *registers)
-{
-    // 1) Restrict to 12 bits, then check if the sign bit (bit 11) is set.
-    uint16_t lit12 = literal & 0xFFF; 
-    int64_t offset = (lit12 & 0x800)
-        ? ((int64_t)lit12 | 0xFFFFFFFFFFFFF000ULL)  // sign-extend negative
-        : (int64_t)lit12;                           // or just use as positive
 
-    // 2) Compute effective address using rd as the base register.
-    uint64_t address = registers[rd] + offset;
-
-    // 3) (Optional) Check alignment and in-bounds conditions.
-    //    (We’ll do alignment, then check if writing 8 bytes is valid.)
-    if (address % 8 != 0) {
-        fprintf(stderr, "Simulation error: Memory must be 8-byte aligned.\n");
-        exit(1);
-    }
+// Helper function: write_mem
+void write_mem(char *memory, uint64_t address, uint64_t value) {
+    // Check bounds (using MEM for MEM_SIZE)
     if (address + 7 >= MEM) {
         fprintf(stderr, "Simulation error: Memory access out of bounds\n");
         exit(1);
     }
-
-    // 4) Write the 64-bit value from register rs to memory,
-    //    one byte at a time.
-    uint64_t value = registers[rs];
+    // Write value in little-endian order, one byte at a time.
     for (int i = 0; i < 8; i++) {
         memory[address + i] = (value >> (8 * i)) & 0xFF;
     }
+}
 
-    // 5) Return the next PC (pc + 4).
+// Revised mov_mr function using write_mem
+uint64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal,
+                char *memory, uint64_t *registers)
+{
+    // Mask the literal to 12 bits.
+    uint16_t lit12 = literal & 0xFFF;
+    // Sign-extend the literal if bit 11 is set.
+    int64_t offset = (lit12 & 0x800)
+        ? ((int64_t)lit12 | 0xFFFFFFFFFFFFF000ULL)
+        : (int64_t)lit12;
+    // Compute effective address using register rd as the base.
+    uint64_t address = registers[rd] + offset;
+    // Check 8-byte alignment.
+    if (address % 8 != 0) {
+        fprintf(stderr, "Simulation error: Memory must be 8-byte aligned.\n");
+        exit(1);
+    }
+    // Write the 64-bit value from register rs into memory using write_mem.
+    write_mem(memory, address, registers[rs]);
+    // Return next PC.
     return pc + 4;
 }
 
