@@ -174,6 +174,7 @@ void exec_call(uint8_t rd, uint64_t current_pc, uint64_t *new_pc)
         fprintf(stderr, "Simulation error: Stack pointer out of bounds\n");
         exit(1);
     }
+    *((uint64_t *)(memory + r[31])) = current_pc + 4;
     *new_pc = r[rd];
 }
 void exec_return(uint64_t *new_pc)
