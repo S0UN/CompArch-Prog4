@@ -248,9 +248,9 @@ uint64_t mov_rl(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
 //
 uint64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, char *memory, uint64_t *registers)
 {
-    int64_t offset = (literal & 0x800) ? ((int64_t)literal | 0xFFFFFFFFFFFFF000ULL) : literal;
+    int64_t offset = (literal & 0x800) ? (int64_t)(literal | 0xFFFFFFFFFFFFF000ULL) : literal;
     uint64_t address = registers[rd] + offset;
-    if (address % 8 != 0 || address + 8 > MEM)
+    if (address % 8 != 0 )
     {
         fprintf(stderr, "Simulation error: Memory access out of bounds\n");
         exit(1);
