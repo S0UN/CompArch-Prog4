@@ -188,7 +188,6 @@ void exec_return(uint64_t *new_pc)
     }
     *new_pc = *((uint64_t *)(memory + r[31]-8));
 }
-
 void exec_brgt(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *new_pc)
 {
     if ((int64_t)r[rs] > (int64_t)r[rt])
