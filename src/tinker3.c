@@ -313,19 +313,28 @@ void exec_divf(uint8_t rd, uint8_t rs, uint8_t rt)
     memcpy(&r[rd], &result, sizeof(double));
 }
 
-void firstRead(size_t size, size_t count, FILE *file)
+void firstRead(FILE *file)
 {
-    size_t bytesRead;
-    uint64_t programCounter = START_ADDRESS;
-    while ((bytesRead = fread((char *)memory + programCounter, size, count, file)) > 0)
-    {
-        programCounter += 4;
-        if (programCounter + 4 > MEM)
-        {
-            error("Program too large for memory");
-        }
+    // Move to the end of the file
+    fseek(file, 0, SEEK_END);
+    
+    // Determine the size of the file
+    long size = ftell(file);
+    if (size <= 0 || (START_ADDRESS + size) > MEM) {
+        error("File too large or invalid.");
+    }
+    
+    // Rewind to the beginning
+    rewind(file);
+    
+    // Clear memory and read the file into memory starting at START_ADDRESS
+    memset(memory, 0, MEM);
+    size_t bytesRead = fread(memory + START_ADDRESS, 1, size, file);
+    if (bytesRead != (size_t)size) {
+        error("Could not read file.");
     }
 }
+
 
 void secondPass(void)
 {
@@ -440,7 +449,7 @@ void secondPass(void)
         case 0x11:
             next_pc = mov_rr(pc, rd, rs, rt, literal);
             break;
-        case 0x1100:
+        case 0x12:
             next_pc = mov_rl(pc, rd, rs, rt, literal);
             break;
         case 0x13:
@@ -473,7 +482,7 @@ int main(int argc, char *argv[])
     memset(memory, 0, MEM);
     memset(r, 0, sizeof(r));
     r[31] = MEM;
-    firstRead(4, 1, file);
+    firstRead( file);
     fclose(file);
     secondPass();
     return 0;
