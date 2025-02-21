@@ -239,10 +239,7 @@ uint64_t mov_rm(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
 {
     int64_t offset = (literal & 0x800) ? ((int64_t)literal | 0xFFFFFFFFFFFFF000ULL) : literal;
     uint64_t address = r[rs] + offset;
-    if (address % 8 != 0 || address + 8 > MEM)
-    {
-        error("Memory access out of bounds");
-    }
+
     r[rd] = read(address);
     return pc + 4;
 }
@@ -267,10 +264,7 @@ uint64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
                          ? ((int64_t)lit12 | 0xFFFFFFFFFFFFF000ULL)
                          : (int64_t)lit12;
     uint64_t address = r[rd] + offset;
-    if (address % 8 != 0)
-    {
-        error("Memory must be 8-byte aligned.");
-    }
+
     mem_write(address, r[rs]);
     return pc + 4;
 }
@@ -313,28 +307,19 @@ void exec_divf(uint8_t rd, uint8_t rs, uint8_t rt)
     memcpy(&r[rd], &result, sizeof(double));
 }
 
-void firstRead(FILE *file)
+void firstRead(size_t size, size_t count, FILE *file)
 {
-    // Move to the end of the file
-    fseek(file, 0, SEEK_END);
-    
-    // Determine the size of the file
-    long size = ftell(file);
-    if (size <= 0 || (START_ADDRESS + size) > MEM) {
-        error("File too large or invalid.");
-    }
-    
-    // Rewind to the beginning
-    rewind(file);
-    
-    // Clear memory and read the file into memory starting at START_ADDRESS
-    memset(memory, 0, MEM);
-    size_t bytesRead = fread(memory + START_ADDRESS, 1, size, file);
-    if (bytesRead != (size_t)size) {
-        error("Could not read file.");
+    size_t bytesRead;
+    uint64_t programCounter = START_ADDRESS;
+    while ((bytesRead = fread((char *)memory + programCounter, size, count, file)) > 0)
+    {
+        programCounter += 4;
+        if (programCounter + 4 > MEM)
+        {
+            error("Program too large for memory");
+        }
     }
 }
-
 
 void secondPass(void)
 {
@@ -482,7 +467,7 @@ int main(int argc, char *argv[])
     memset(memory, 0, MEM);
     memset(r, 0, sizeof(r));
     r[31] = MEM;
-    firstRead( file);
+    firstRead(4, 1, file);
     fclose(file);
     secondPass();
     return 0;
