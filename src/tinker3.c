@@ -262,7 +262,10 @@ uint64_t mov_rl(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
 // mov_mr: Register-to-memory
 uint64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal)
 {
-    int64_t offset = (literal & 0x800) ? ((int64_t)literal | 0xFFFFFFFFFFFFF000ULL) : literal;
+    uint16_t lit12 = literal & 0xFFF; // no extra masking here
+    int64_t offset = (lit12 & 0x800)
+                         ? ((int64_t)lit12 | 0xFFFFFFFFFFFFF000ULL)
+                         : (int64_t)lit12;
     uint64_t address = r[rd] + offset;
     if (address % 8 != 0)
     {
@@ -271,6 +274,7 @@ uint64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
     mem_write(address, r[rs]);
     return pc + 4;
 }
+
 // Floating Point Instructions
 void exec_addf(uint8_t rd, uint8_t rs, uint8_t rt)
 {
@@ -436,7 +440,7 @@ void secondPass(void)
         case 0x11:
             next_pc = mov_rr(pc, rd, rs, rt, literal);
             break;
-        case 0x12:
+        case 0x1100:
             next_pc = mov_rl(pc, rd, rs, rt, literal);
             break;
         case 0x13:
