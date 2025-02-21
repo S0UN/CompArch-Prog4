@@ -23,7 +23,7 @@ void error(const char *message)
 }
 
 // Global write function: writes a 64-bit value to memory in little-endian order.
-void write(uint64_t address, uint64_t value)
+void mem_write(uint64_t address, uint64_t value)
 {
     if (address + 7 >= MEM)
     {
@@ -35,7 +35,6 @@ void write(uint64_t address, uint64_t value)
     }
 }
 
-// Global read function: reads a 64-bit value from memory in little-endian order.
 uint64_t read(uint64_t address)
 {
     if (address + 7 >= MEM)
@@ -225,8 +224,7 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *pc)
     case 0x4:
         if (r[rd] == 1)
         {
-            printf("%lu\n", r[rs]); // Notice the '\n'
-            fflush(stdout);
+            printf("%lu\n", r[rs]); // add newline
         }
         break;
     default:
@@ -264,19 +262,15 @@ uint64_t mov_rl(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
 // mov_mr: Register-to-memory
 uint64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal)
 {
-    uint16_t lit12 = literal & 0xFFF; // no extra masking here
-    int64_t offset = (lit12 & 0x800)
-                         ? ((int64_t)lit12 | 0xFFFFFFFFFFFFF000ULL)
-                         : (int64_t)lit12;
+    int64_t offset = (literal & 0x800) ? ((int64_t)literal | 0xFFFFFFFFFFFFF000ULL) : literal;
     uint64_t address = r[rd] + offset;
     if (address % 8 != 0)
     {
         error("Memory must be 8-byte aligned.");
     }
-    write(address, r[rs]);
+    mem_write(address, r[rs]);
     return pc + 4;
 }
-
 // Floating Point Instructions
 void exec_addf(uint8_t rd, uint8_t rs, uint8_t rt)
 {
