@@ -14,6 +14,7 @@
 // Global simulated memory and registers.
 uint8_t memory[MEM];
 uint64_t r[NUM_REGISTERS];
+uint64_t code_end;
 
 // Global error function.
 void error(const char *message)
@@ -174,10 +175,9 @@ void exec_call(uint8_t rd, uint64_t current_pc, uint64_t *new_pc)
         fprintf(stderr, "Simulation error: Stack pointer out of bounds\n");
         exit(1);
     }
-    *((uint64_t *)(memory + r[31]-8)) = current_pc + 4;
+    *((uint64_t *)(memory + r[31] - 8)) = current_pc + 4;
     *new_pc = r[rd];
 }
-
 
 void exec_return(uint64_t *new_pc)
 {
@@ -186,8 +186,9 @@ void exec_return(uint64_t *new_pc)
         fprintf(stderr, "Simulation error: Stack underflow\n");
         exit(1);
     }
-    *new_pc = *((uint64_t *)(memory + r[31]-8));
+    *new_pc = *((uint64_t *)(memory + r[31] - 8));
 }
+
 void exec_brgt(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *new_pc)
 {
     if ((int64_t)r[rs] > (int64_t)r[rt])
@@ -241,7 +242,9 @@ uint64_t mov_rm(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
 {
     int64_t offset = (literal & 0x800) ? ((int64_t)literal | 0xFFFFFFFFFFFFF000ULL) : literal;
     uint64_t address = r[rs] + offset;
-
+    if (address < START_ADDRESS || address + 7 > code_end) {
+        error("Attempt to write outside code bounds.");
+    }
     r[rd] = read(address);
     return pc + 4;
 }
@@ -266,7 +269,9 @@ uint64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
                          ? ((int64_t)lit12 | 0xFFFFFFFFFFFFF000ULL)
                          : (int64_t)lit12;
     uint64_t address = r[rd] + offset;
-
+    if (address < START_ADDRESS || address + 7 > code_end) {
+        error("Attempt to write outside code bounds.");
+    }
     mem_write(address, r[rs]);
     return pc + 4;
 }
@@ -453,6 +458,7 @@ void secondPass(void)
     }
 }
 
+
 int main(int argc, char *argv[])
 {
     if (argc < 2)
@@ -471,6 +477,12 @@ int main(int argc, char *argv[])
     r[31] = MEM;
     firstRead(4, 1, file);
     fclose(file);
+
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    uint64_t code_end_local = START_ADDRESS + size;
+    code_end = code_end_local;
+
     secondPass();
     return 0;
 }
