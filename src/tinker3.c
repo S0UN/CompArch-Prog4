@@ -196,6 +196,8 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *registers, char *me
     return false;
 }
 
+// Data Movement Instructions
+// mov_rm: Memory-to-register remains unchanged.
 uint64_t mov_rm(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, char *memory, uint64_t *registers)
 {
     int64_t offset = (literal & 0x800) ? ((int64_t)literal | 0xFFFFFFFFFFFFF000ULL) : literal;
@@ -209,13 +211,14 @@ uint64_t mov_rm(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
     return pc + 4;
 }
 
+// mov_rr: Register-to-register remains unchanged.
 uint64_t mov_rr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, uint64_t *registers)
 {
     registers[rd] = registers[rs];
     return pc + 4;
 }
 
-
+// mov_rl: Register literal modification remains unchanged.
 uint64_t mov_rl(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, uint64_t *registers)
 {
     uint64_t mask = 0xFFF;
@@ -223,74 +226,69 @@ uint64_t mov_rl(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
     return pc + 4;
 }
 
-
-// Helper function: write_mem
+// Helper function: write_mem (same as working code)
 void write_mem(char *memory, uint64_t address, uint64_t value) {
-    // Check bounds (using MEM for MEM_SIZE)
     if (address + 7 >= MEM) {
         fprintf(stderr, "Simulation error: Memory access out of bounds\n");
         exit(1);
     }
-    // Write value in little-endian order, one byte at a time.
     for (int i = 0; i < 8; i++) {
         memory[address + i] = (value >> (8 * i)) & 0xFF;
     }
 }
 
-// Revised mov_mr function using write_mem
-uint64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal,
-                char *memory, uint64_t *registers)
+// Revised mov_mr: Register-to-memory (fixed)
+uint64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, char *memory, uint64_t *registers)
 {
-    // Mask the literal to 12 bits.
     uint16_t lit12 = literal & 0xFFF;
-    // Sign-extend the literal if bit 11 is set.
     int64_t offset = (lit12 & 0x800)
         ? ((int64_t)lit12 | 0xFFFFFFFFFFFFF000ULL)
         : (int64_t)lit12;
-    // Compute effective address using register rd as the base.
     uint64_t address = registers[rd] + offset;
-    // Check 8-byte alignment.
     if (address % 8 != 0) {
-        fprintf(stderr, "Simulation error: Memory must be 8-byte aligned.\n");
-        exit(1);
+        error("Memory must be 8-byte aligned.");
     }
-    // Write the 64-bit value from register rs into memory using write_mem.
     write_mem(memory, address, registers[rs]);
-    // Return next PC.
     return pc + 4;
 }
-
-
 
 // Floating Point Instructions
 void exec_addf(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
-    double a = *((double *)&registers[rs]);
-    double b = *((double *)&registers[rt]);
-    *((double *)&registers[rd]) = a + b;
+    double a, b, result;
+    memcpy(&a, &registers[rs], sizeof(double));
+    memcpy(&b, &registers[rt], sizeof(double));
+    result = a + b;
+    memcpy(&registers[rd], &result, sizeof(double));
 }
 void exec_subf(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
-    double a = *((double *)&registers[rs]);
-    double b = *((double *)&registers[rt]);
-    *((double *)&registers[rd]) = a - b;
+    double a, b, result;
+    memcpy(&a, &registers[rs], sizeof(double));
+    memcpy(&b, &registers[rt], sizeof(double));
+    result = a - b;
+    memcpy(&registers[rd], &result, sizeof(double));
 }
 void exec_mulf(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
-    double a = *((double *)&registers[rs]);
-    double b = *((double *)&registers[rt]);
-    *((double *)&registers[rd]) = a * b;
+    double a, b, result;
+    memcpy(&a, &registers[rs], sizeof(double));
+    memcpy(&b, &registers[rt], sizeof(double));
+    result = a * b;
+    memcpy(&registers[rd], &result, sizeof(double));
 }
 void exec_divf(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
-    double b = *((double *)&registers[rt]);
+    double a, b, result;
+    memcpy(&a, &registers[rs], sizeof(double));
+    memcpy(&b, &registers[rt], sizeof(double));
     if (b == 0.0)
     {
         fprintf(stderr, "Simulation error: Division by zero (floating point)\n");
         exit(1);
     }
-    double a = *((double *)&registers[rs]);
-    *((double *)&registers[rd]) = a / b;
+    result = a / b;
+    memcpy(&registers[rd], &result, sizeof(double));
 }
 
 void firstRead(void *ptr, size_t size, size_t count, FILE *file)
