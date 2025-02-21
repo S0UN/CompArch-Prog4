@@ -196,15 +196,6 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *registers, char *me
     return false;
 }
 
-// Data Movement Instructions
-// These functions implement the MOV instructions exactly as specified.
-
-//
-// mov_rm: Memory-to-register
-//    Sign-extend the 12-bit literal, add it to register[rs] to form the effective address,
-//    then load the 64-bit value from that memory location into register[rd].
-//    (Returns pc+4.)
-//
 uint64_t mov_rm(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, char *memory, uint64_t *registers)
 {
     int64_t offset = (literal & 0x800) ? ((int64_t)literal | 0xFFFFFFFFFFFFF000ULL) : literal;
@@ -218,21 +209,13 @@ uint64_t mov_rm(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
     return pc + 4;
 }
 
-//
-// mov_rr: Register-to-register
-//    Simply copy register[rs] into register[rd] and return pc+4.
-//
 uint64_t mov_rr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, uint64_t *registers)
 {
     registers[rd] = registers[rs];
     return pc + 4;
 }
 
-//
-// mov_rl: Register literal modification
-//    Use a mask of 0xFFF on the current value of register[rd] and OR in the literal (masked to 12 bits).
-//    Return pc+4.
-//
+
 uint64_t mov_rl(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, uint64_t *registers)
 {
     uint64_t mask = 0xFFF;
@@ -240,12 +223,6 @@ uint64_t mov_rl(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
     return pc + 4;
 }
 
-//
-// mov_mr: Register-to-memory
-//    Sign-extend the 12-bit literal, add it to register[rd] (as base) to compute the effective address,
-//    then write the 64-bit value from register[rs] into that memory location.
-//    Return pc+4.
-//
 int64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, 
                 char *memory, uint64_t *registers)
 {
@@ -266,7 +243,7 @@ int64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal
     }
 
     // 4) Write register rs into memory at that address.
-    *((uint64_t *)(memory + address)) = registers[rs];
+    *((uint64_t *)(address)) = registers[rs];
 
     // 5) Return the next PC (pc + 4).
     return pc + 4;
