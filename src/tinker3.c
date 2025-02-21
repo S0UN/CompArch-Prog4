@@ -140,7 +140,7 @@ void exec_call(uint8_t rd, char *memory, uint64_t *registers, uint64_t current_p
         exit(1);
     }
     *((uint64_t *)(memory + registers[31])) = current_pc + 4;
-    *new_pc = registers[rd];
+   // *new_pc = registers[rd];
 }
 void exec_return(char *memory, uint64_t *registers, uint64_t *new_pc)
 {
@@ -149,7 +149,7 @@ void exec_return(char *memory, uint64_t *registers, uint64_t *new_pc)
         fprintf(stderr, "Simulation error: Stack underflow\n");
         exit(1);
     }
-    *new_pc = *((uint64_t *)(memory + registers[31]));
+  //  *new_pc = *((uint64_t *)(memory + registers[31]));
     registers[31] += 8;
 }
 void exec_brgt(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers, uint64_t *new_pc)

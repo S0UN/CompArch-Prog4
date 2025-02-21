@@ -43,7 +43,7 @@ InstructionInfo instructions[] = {
     {"shftl", 0x6, "R", 0},
     {"shftli", 0x7, "I", 0}, // unsigned immediate
     {"br", 0x8, "U", 0},
-    // "brr" is ambiguous – see special handling below.
+    // "brr" is ambiguous 
     {"brnz", 0xb, "R2", 0},
     {"call", 0xc, "U", 0},
     {"return", 0xd, "N", 0},
