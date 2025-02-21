@@ -42,6 +42,7 @@ void exec_div(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 }
 
 // Logic Instructions
+
 void exec_and(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
     registers[rd] = registers[rs] & registers[rt];
@@ -76,6 +77,7 @@ void exec_shftli(uint8_t rd, uint64_t L, uint64_t *registers)
 }
 
 // Control Instructions
+
 void exec_br(uint8_t rd, uint64_t *registers, uint64_t *new_pc)
 {
     if (registers[rd] >= MEM)
@@ -131,13 +133,14 @@ void exec_call(uint8_t rd, char *memory, uint64_t *registers, uint64_t current_p
         fprintf(stderr, "Simulation error: Stack underflow\n");
         exit(1);
     }
+    //registers[31] -= 8;
     if (registers[31] + 8 > MEM)
     {
         fprintf(stderr, "Simulation error: Stack pointer out of bounds\n");
         exit(1);
     }
     *((uint64_t *)(memory + registers[31])) = current_pc + 4;
-    *new_pc = registers[rd];
+   *new_pc = registers[rd];
 }
 void exec_return(char *memory, uint64_t *registers, uint64_t *new_pc)
 {
@@ -146,7 +149,8 @@ void exec_return(char *memory, uint64_t *registers, uint64_t *new_pc)
         fprintf(stderr, "Simulation error: Stack underflow\n");
         exit(1);
     }
-    *new_pc = *((uint64_t *)(memory + registers[31]));
+ *new_pc = *((uint64_t *)(memory + registers[31]));
+ //   registers[31] += 8;
 }
 void exec_brgt(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers, uint64_t *new_pc)
 {
@@ -197,48 +201,51 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *registers, char *me
 }
 
 // Data Movement Instructions
-// Implemented exactly as provided:
-// mov_rm: memory-to-register
-uint64_t mov_rm(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, char *memory, uint64_t *registers)
+void exec_mov_mem(uint8_t rd, uint8_t rs, uint64_t L, char *memory, uint64_t *registers)
 {
-    int64_t offset = (literal & 0x800) ? ((int64_t)literal | 0xFFFFFFFFFFFFF000ULL) : literal;
-    uint64_t address = registers[rs] + offset;
-    if (address % 8 != 0 || address + 8 > MEM)
+    int64_t offset = (L & 0x800) ? ((int64_t)L | 0xFFFFFFFFFFFFF000LL) : L;
+    uint64_t addr = registers[rd] + offset;
+    if (addr % 8 != 0)
+    {
+        fprintf(stderr, "Simulation error: Unaligned memory access\n");
+        exit(1);
+    }
+    if (addr + 8 > MEM)
     {
         fprintf(stderr, "Simulation error: Memory access out of bounds\n");
         exit(1);
     }
-    registers[rd] = *((uint64_t *)(memory + address));
-    return pc + 4;
+    registers[rs] = *((uint64_t *)(memory + addr));
 }
-// mov_rr: register-to-register
-uint64_t mov_rr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, uint64_t *registers)
+void exec_mov_reg(uint8_t rd, uint8_t rs, uint64_t *registers)
 {
     registers[rd] = registers[rs];
-    return pc + 4;
 }
-// mov_rl: register literal modification
-uint64_t mov_rl(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, uint64_t *registers)
+void exec_mov_L(uint8_t rd, uint64_t L, uint64_t *registers)
 {
     uint64_t mask = 0xFFF;
-    registers[rd] = (registers[rd] & ~mask) | (literal & mask);
-    return pc + 4;
+    registers[rd] = (registers[rd] & ~mask) | (L & mask);
 }
-// mov_mr: register-to-memory
-uint64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal, char *memory, uint64_t *registers)
+void exec_store_mem(uint8_t rd, uint64_t L, uint8_t rs, char *memory, uint64_t *registers)
 {
-    int64_t offset = (literal & 0x800) ? ((int64_t)literal | 0xFFFFFFFFFFFFF000ULL) : literal;
-    uint64_t address = registers[rd] + offset;
-    if (address % 8 != 0 || address + 8 > MEM)
+    int64_t offset = (L & 0x800) ? ((int64_t)L | 0xFFFFFFFFFFFFF000LL) : L;
+    uint64_t addr = registers[rd] + offset;
+    if (addr % 8 != 0)
+    {
+        fprintf(stderr, "Simulation error: Unaligned memory access\n");
+        exit(1);
+    }
+    if (addr + 8 > MEM)
     {
         fprintf(stderr, "Simulation error: Memory access out of bounds\n");
         exit(1);
     }
-    *((uint64_t *)(memory + address)) = registers[rs];
-    return pc + 4;
+    *((uint64_t *)(memory + addr)) = registers[rs];
 }
 
+
 // Floating Point Instructions
+
 void exec_addf(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *registers)
 {
     double a = *((double *)&registers[rs]);
@@ -291,6 +298,7 @@ void secondPass(char *memory, uint64_t *registers)
     bool halted = false;
     while (!halted)
     {
+
         if (pc + 4 > MEM)
         {
             fprintf(stderr, "Simulation error: PC out of bounds\n");
@@ -302,12 +310,6 @@ void secondPass(char *memory, uint64_t *registers)
             fprintf(stderr, "Simulation error: Unaligned PC\n");
             exit(1);
         }
-        // Check: Ensure PC is not underflowed before fetching instruction
-        if (pc < start)
-        {
-            fprintf(stderr, "Simulation error: PC underflow\n");
-            exit(1);
-        }
         // Fetch 4-byte instruction (little-endian)
         uint32_t instruction = *((uint32_t *)(memory + pc));
         // Decode fields
@@ -315,7 +317,7 @@ void secondPass(char *memory, uint64_t *registers)
         uint8_t rd = (instruction >> 22) & 0x1F;
         uint8_t rs = (instruction >> 17) & 0x1F;
         uint8_t rt = (instruction >> 12) & 0x1F;
-        uint64_t L_field = instruction & 0xFFF;
+        uint64_t L = instruction & 0xFFF;
         // Default next PC is pc + 4
         uint64_t next_pc = pc + 4;
 
@@ -326,13 +328,13 @@ void secondPass(char *memory, uint64_t *registers)
             exec_add(rd, rs, rt, registers);
             break;
         case 0x19:
-            exec_addi(rd, L_field, registers);
+            exec_addi(rd, L, registers);
             break;
         case 0x1A:
             exec_sub(rd, rs, rt, registers);
             break;
         case 0x1B:
-            exec_subi(rd, L_field, registers);
+            exec_subi(rd, L, registers);
             break;
         case 0x1C:
             exec_mul(rd, rs, rt, registers);
@@ -357,13 +359,13 @@ void secondPass(char *memory, uint64_t *registers)
             exec_shftr(rd, rs, rt, registers);
             break;
         case 0x05:
-            exec_shftri(rd, L_field, registers);
+            exec_shftri(rd, L, registers);
             break;
         case 0x06:
             exec_shftl(rd, rs, rt, registers);
             break;
         case 0x07:
-            exec_shftli(rd, L_field, registers);
+            exec_shftli(rd, L, registers);
             break;
         // Control
         case 0x08:
@@ -373,7 +375,7 @@ void secondPass(char *memory, uint64_t *registers)
             exec_brr(rd, pc, registers, &next_pc);
             break;
         case 0x0A:
-            exec_brrL(L_field, pc, &next_pc);
+            exec_brrL(L, pc, &next_pc);
             break;
         case 0x0B:
             exec_brnz(rd, rs, pc, registers, &next_pc);
@@ -389,7 +391,7 @@ void secondPass(char *memory, uint64_t *registers)
             break;
         // Privileged
         case 0x0F:
-            if (exec_priv(L_field, rd, rs, registers, memory, &pc))
+            if (exec_priv(L, rd, rs, registers, memory, &pc))
             {
                 halted = true;
             }
@@ -409,34 +411,40 @@ void secondPass(char *memory, uint64_t *registers)
             break;
         // Data Movement
         case 0x10:
-            next_pc = mov_rm(pc, rd, rs, rt, (uint16_t)L_field, memory, registers);
+            exec_mov_mem(rd, rs, L, memory, registers);
             break;
         case 0x11:
-            next_pc = mov_rr(pc, rd, rs, rt, (uint16_t)L_field, registers);
+            exec_mov_reg(rd, rs, registers);
             break;
         case 0x12:
-            next_pc = mov_rl(pc, rd, rs, rt, (uint16_t)L_field, registers);
+            exec_mov_L(rd, L, registers);
             break;
         case 0x13:
-            next_pc = mov_mr(pc, rd, rs, rt, (uint16_t)L_field, memory, registers);
+            exec_store_mem(rd, L, rs, memory, registers);
             break;
         default:
             fprintf(stderr, "Simulation error: Unknown opcode 0x%X\n", opcode);
             exit(1);
         }
-        // Added Check: Ensure next_pc is not below START_ADDRESS (underflow)
-        if (next_pc < start)
+    if (next_pc   < start)
         {
             fprintf(stderr, "Simulation error: PC underflow\n");
             exit(1);
         }
+
         pc = next_pc;
+
+        if (pc < start)
+        {
+            fprintf(stderr, "Simulation error: PC underflow\n");
+            exit(1);
+        }
     }
 }
 
 int main(int argc, char *argv[])
 {
-    // If no file provided, print exactly "Invalid tinker filepath"
+    // Modified Check: If no file provided, print exactly "Invalid tinker filepath"
     if (argc < 2)
     {
         fprintf(stderr, "Invalid tinker filepath\n");
@@ -474,7 +482,7 @@ int main(int argc, char *argv[])
     firstRead(memory, 4, 1, file);
     fclose(file);
 
-    // Run the simulation.
+    // Now call secondPass to simulate execution of the loaded instructions.
     secondPass(memory, registers);
 
     free(memory);
