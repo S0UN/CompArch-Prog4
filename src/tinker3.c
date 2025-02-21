@@ -23,7 +23,7 @@ void error(const char *message)
 }
 
 // Global write function: writes a 64-bit value to memory in little-endian order.
-void mem_write(uint64_t address, uint64_t value)
+void write(uint64_t address, uint64_t value)
 {
     if (address + 7 >= MEM)
     {
@@ -35,6 +35,7 @@ void mem_write(uint64_t address, uint64_t value)
     }
 }
 
+// Global read function: reads a 64-bit value from memory in little-endian order.
 uint64_t read(uint64_t address)
 {
     if (address + 7 >= MEM)
@@ -224,7 +225,8 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *pc)
     case 0x4:
         if (r[rd] == 1)
         {
-            printf("%lu\n", r[rs]); // add newline
+            printf("%lu\n", r[rs]); // Notice the '\n'
+            fflush(stdout);
         }
         break;
     default:
@@ -271,7 +273,7 @@ uint64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
     {
         error("Memory must be 8-byte aligned.");
     }
-    mem_write(address, r[rs]);
+    write(address, r[rs]);
     return pc + 4;
 }
 
