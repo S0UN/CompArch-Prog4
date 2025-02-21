@@ -174,9 +174,11 @@ void exec_call(uint8_t rd, uint64_t current_pc, uint64_t *new_pc)
         fprintf(stderr, "Simulation error: Stack pointer out of bounds\n");
         exit(1);
     }
-    *((uint64_t *)(memory + r[31])) = current_pc + 4;
+    *((uint64_t *)(memory + r[31]-8)) = current_pc + 4;
     *new_pc = r[rd];
 }
+
+
 void exec_return(uint64_t *new_pc)
 {
     if (r[31] > MEM - 8)
@@ -184,8 +186,9 @@ void exec_return(uint64_t *new_pc)
         fprintf(stderr, "Simulation error: Stack underflow\n");
         exit(1);
     }
-    *new_pc = *((uint64_t *)(memory + r[31]));
+    *new_pc = *((uint64_t *)(memory + r[31]-8));
 }
+
 void exec_brgt(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *new_pc)
 {
     if ((int64_t)r[rs] > (int64_t)r[rt])
