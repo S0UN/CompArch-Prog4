@@ -625,14 +625,12 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // ---------------- NEW: Reserve space for the header (5 fields × 8 bytes = 40 bytes).
     TinkerFileHeader dummy = {0, 0, 0, 0, 0};
     fwrite(&dummy, sizeof(dummy), 1, fout);
 
     int mode = 0; // 1 = code; 2 = data.
     char line[MAX_LINE];
     uint64_t code_size = 0, data_size = 0;
-    // Assume write_output_file() prints a header of 6 lines (header fields plus a blank line)
     int header_lines = 6;
     while (fgets(line, sizeof(line), fin))
     {
@@ -670,7 +668,7 @@ int main(int argc, char *argv[])
         else if (mode == 2)
         {
             char *endptr;
-            int64_t value = strtoll(trimmed, &endptr, 0);
+            uint64_t value = strtoll(trimmed, &endptr, 0);
             fwrite(&value, sizeof(value), 1, fout);
             data_size += sizeof(value);
         }
