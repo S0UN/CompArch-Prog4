@@ -9,7 +9,6 @@
 #include "line.h"
 #include "tinker_file_header.h"
 
-
 #define MAX_OPERAND_LENGTH 32
 
 LabelTable *labels = NULL;
@@ -549,7 +548,6 @@ void ull_to_bin_string(unsigned long long value, int bits, char *dest)
     dest[bits] = '\0';
 }
 
-
 #include "syntax_verifier.h"
 #include "arraylist.h"
 #include "label_table.h"
@@ -578,8 +576,8 @@ int main(int argc, char *argv[])
     ArrayList instructions;
     initialize_arraylist(&instructions);
     // ---------------- NEW: Separate counters for code and data.
-    uint64_t code_address = 0x2000;   // Code section starts at 0x2000.
-    uint64_t data_address = 0x10000;  // Data section starts at 0x10000.
+    uint64_t code_address = 0x2000;  // Code section starts at 0x2000.
+    uint64_t data_address = 0x10000; // Data section starts at 0x10000.
     // ---------------- End NEW
 
     // First pass: Collect labels.
@@ -672,10 +670,10 @@ int main(int argc, char *argv[])
         else if (mode == 2)
         {
             char *endptr;
-            long long value = strtoull(trimmed, &endptr, 0);
-            uint64_t data = value;
-            fwrite(&data, sizeof(data), 1, fout);
-            data_size += sizeof(data);
+            int64_t value = strtoll(trimmed, &endptr, 0);
+            fwrite(&value, sizeof(value), 1, fout);
+            data_size += sizeof(value);
+            
         }
     }
     fclose(fin);
