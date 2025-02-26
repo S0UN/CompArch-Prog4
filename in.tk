@@ -1,13 +1,2 @@
 .code
-    add r1, r2, r3
-    add r1, r2, r3
-    br :L1        
-    add r1, r2, r3
-    add r1, r2, r3
-    add r1, r2, r3
-    add r1, r2, r3
-:L1
-    add r1, r2, r3
-    add r1, r2, r3
-    halt
-
+	brr -1024

@@ -1623,11 +1623,7 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
     {
         remove_comments(buffer);
         trim_whitespace(buffer);
-        if (strchr(buffer, '-') != NULL)
-        {
-            fprintf(stderr, "Error: Negative values are not allowed anywhere in the line.\n");
-            exit(1);
-        }
+
         if (strlen(buffer) == 0)
             continue;
 
