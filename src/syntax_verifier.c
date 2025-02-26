@@ -672,7 +672,7 @@ int main(int argc, char *argv[])
         else if (mode == 2)
         {
             char *endptr;
-            unsigned long long value = strtoull(trimmed, &endptr, 0);
+            long long value = strtoull(trimmed, &endptr, 0);
             uint64_t data = value;
             fwrite(&data, sizeof(data), 1, fout);
             data_size += sizeof(data);
