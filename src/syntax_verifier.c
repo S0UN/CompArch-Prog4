@@ -1377,19 +1377,16 @@ void expand_macro(Line *line_entry, ArrayList *instruction_list, int *address)
 }
 
 #define MAX_OPERAND_LENGTH 32
-
 void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *address, LabelTable *labels)
 {
-    long long value;
-
-    // If the literal operand starts with a colon, resolve it as a label.
+    // Use a 64-bit unsigned variable to hold the literal.
+    uint64_t value;
     if (line_entry->operands[1][0] == ':')
     {
         char lbl[20];
-        // Copy everything after the colon.
+        // Skip the colon.
         strcpy(lbl, line_entry->operands[1] + 1);
         trim_whitespace(lbl);
-
         // Remove surrounding quotes if present.
         if (lbl[0] == '\"' || lbl[0] == '\'')
         {
@@ -1400,12 +1397,10 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
         {
             lbl[len - 1] = '\0';
         }
-
         printf("DEBUG: Looking up label: '%s'\n", lbl);
-        int addr = get_label_address(labels, lbl);
-
-        printf("ADRESS OF LABEL IS'%i'", addr);
-        if (addr == -1)
+        uint64_t addr = (uint64_t)get_label_address(labels, lbl);
+        printf("DEBUG: Address of label '%s' is '%" PRIu64 "'\n", lbl, addr);
+        if (addr == (uint64_t)-1)
         {
             fprintf(stderr, "Undefined label: %s\n", lbl);
             exit(EXIT_FAILURE);
@@ -1414,96 +1409,91 @@ void expand_ld_instruction(Line *line_entry, ArrayList *instruction_list, int *a
     }
     else
     {
-        value = strtoll(line_entry->operands[1], NULL, 0); // Parse immediate value
+        // Use strtoull so we get the full 64-bit value.
+        value = strtoull(line_entry->operands[1], NULL, 0);
     }
 
-    // Break the 64-bit immediate into fixed chunks.
-    long long chunk0 = (value >> 52) & 0xFFF; // top 12 bits
-    long long chunk1 = (value >> 40) & 0xFFF;
-    long long chunk2 = (value >> 28) & 0xFFF;
-    long long chunk3 = (value >> 16) & 0xFFF;
-    long long chunk4 = (value >> 4) & 0xFFF;
-    long long chunk5 = value & 0xF; // final 4 bits
+    // Split the 64-bit value into 6 chunks:
+    // 5 chunks of 12 bits (for bits 52–4) and 1 final chunk of 4 bits.
+    uint64_t chunk0 = (value >> 52) & 0xFFF; // top 12 bits
+    uint64_t chunk1 = (value >> 40) & 0xFFF;
+    uint64_t chunk2 = (value >> 28) & 0xFFF;
+    uint64_t chunk3 = (value >> 16) & 0xFFF;
+    uint64_t chunk4 = (value >> 4) & 0xFFF;
+    uint64_t chunk5 = value & 0xF; // final 4 bits
 
-    Line new_entry1;
-    memset(&new_entry1, 0, sizeof(Line));
-    strcpy(new_entry1.opcode, "xor");
-    // All three operands are the destination register.
-    strncpy(new_entry1.operands[0], line_entry->operands[0], sizeof(new_entry1.operands[0]) - 1);
-    strncpy(new_entry1.operands[1], line_entry->operands[0], sizeof(new_entry1.operands[1]) - 1);
-    strncpy(new_entry1.operands[2], line_entry->operands[0], sizeof(new_entry1.operands[2]) - 1);
-    new_entry1.operand_count = 3;
-    new_entry1.program_counter = (*address);
-    new_entry1.type = 'I';
-    add_to_arraylist(instruction_list, new_entry1);
-    // (*address) += 4;
+    // The expansion will generate 1 xor, 1 addi for chunk0, then for chunks 1-4: shftli then addi,
+    // then a final shftli (by 4) and addi for chunk5.
+    // (Note: In our design, even if a chunk is 0, we output an addi instruction.)
 
-    Line new_entry2;
-    memset(&new_entry2, 0, sizeof(Line));
-    new_entry2.type = 'I';
-    strcpy(new_entry2.opcode, "addi");
-    strncpy(new_entry2.operands[0], line_entry->operands[0], sizeof(new_entry2.operands[0]) - 1);
-    // Use chunk0 (even if it is 0).
-    snprintf(new_entry2.operands[1], sizeof(new_entry2.operands[1]), "%lld", chunk0);
-    new_entry2.operand_count = 2;
-    new_entry2.program_counter = (*address);
-    add_to_arraylist(instruction_list, new_entry2);
-    // (*address) += 4;
+    // 1. Zero the destination register.
+    Line new_entry;
+    memset(&new_entry, 0, sizeof(Line));
+    strcpy(new_entry.opcode, "xor");
+    // Use the destination register from the ld instruction.
+    strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+    strncpy(new_entry.operands[1], line_entry->operands[0], sizeof(new_entry.operands[1]) - 1);
+    strncpy(new_entry.operands[2], line_entry->operands[0], sizeof(new_entry.operands[2]) - 1);
+    new_entry.operand_count = 3;
+    new_entry.program_counter = (*address);
+    new_entry.type = 'I';
+    add_to_arraylist(instruction_list, new_entry);
 
-    // --- Instructions 3-10: Four pairs of (shftli, addi) for chunks 1 to 4 ---
-    // Each pair shifts left by 12 bits and then adds the next 12-bit chunk.
-    long long chunks[4] = {chunk1, chunk2, chunk3, chunk4};
+    // 2. Load chunk0.
+    memset(&new_entry, 0, sizeof(Line));
+    new_entry.type = 'I';
+    strcpy(new_entry.opcode, "addi");
+    strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+    // Print chunk0 using PRIu64.
+    snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%" PRIu64, chunk0);
+    new_entry.operand_count = 2;
+    new_entry.program_counter = (*address);
+    add_to_arraylist(instruction_list, new_entry);
+
+    // 3. For chunks 1 through 4, do: shftli 12 then addi with chunk value.
+    uint64_t chunks[4] = {chunk1, chunk2, chunk3, chunk4};
     for (int i = 0; i < 4; i++)
     {
-        // Shift left by 12
-        {
-            Line new_entry3;
-            memset(&new_entry3, 0, sizeof(Line));
-            new_entry3.type = 'I';
-            strcpy(new_entry3.opcode, "shftli");
-            strncpy(new_entry3.operands[0], line_entry->operands[0], sizeof(new_entry3.operands[0]) - 1);
-            snprintf(new_entry3.operands[1], sizeof(new_entry3.operands[1]), "12");
-            new_entry3.operand_count = 2;
-            new_entry3.program_counter = (*address);
-            add_to_arraylist(instruction_list, new_entry3);
-            //(*address) += 4;
-        }
-        // Add the 12-bit chunk (even if it is 0)
-        {
-            Line new_entry4;
-            memset(&new_entry4, 0, sizeof(Line));
-            new_entry4.type = 'I';
-            strcpy(new_entry4.opcode, "addi");
-            strncpy(new_entry4.operands[0], line_entry->operands[0], sizeof(new_entry4.operands[0]) - 1);
-            snprintf(new_entry4.operands[1], sizeof(new_entry4.operands[1]), "%lld", chunks[i]);
-            new_entry4.operand_count = 2;
-            new_entry4.program_counter = (*address);
-            add_to_arraylist(instruction_list, new_entry4);
-            // (*address) += 4;
-        }
+        // Shift left by 12.
+        memset(&new_entry, 0, sizeof(Line));
+        new_entry.type = 'I';
+        strcpy(new_entry.opcode, "shftli");
+        strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+        snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "12");
+        new_entry.operand_count = 2;
+        new_entry.program_counter = (*address);
+        add_to_arraylist(instruction_list, new_entry);
+
+        // Add the next 12-bit chunk.
+        memset(&new_entry, 0, sizeof(Line));
+        new_entry.type = 'I';
+        strcpy(new_entry.opcode, "addi");
+        strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+        snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%" PRIu64, chunks[i]);
+        new_entry.operand_count = 2;
+        new_entry.program_counter = (*address);
+        add_to_arraylist(instruction_list, new_entry);
     }
 
-    Line new_entry5;
-    memset(&new_entry5, 0, sizeof(Line));
-    new_entry5.type = 'I';
-    strcpy(new_entry5.opcode, "shftli");
-    strncpy(new_entry5.operands[0], line_entry->operands[0], sizeof(new_entry5.operands[0]) - 1);
-    snprintf(new_entry5.operands[1], sizeof(new_entry5.operands[1]), "4");
-    new_entry5.operand_count = 2;
-    new_entry5.program_counter = (*address);
-    add_to_arraylist(instruction_list, new_entry5);
-    //(*address) += 4;
-    Line new_entry6;
-    memset(&new_entry6, 0, sizeof(Line));
-    new_entry6.type = 'I';
-    strcpy(new_entry6.opcode, "addi");
-    strncpy(new_entry6.operands[0], line_entry->operands[0], sizeof(new_entry6.operands[0]) - 1);
-    // Add the final 4 bits.
-    snprintf(new_entry6.operands[1], sizeof(new_entry6.operands[1]), "%lld", chunk5);
-    new_entry6.operand_count = 2;
-    new_entry6.program_counter = (*address);
-    add_to_arraylist(instruction_list, new_entry6);
-    //  (*address) += 4;
+    // 4. Final shift left by 4.
+    memset(&new_entry, 0, sizeof(Line));
+    new_entry.type = 'I';
+    strcpy(new_entry.opcode, "shftli");
+    strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+    snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "4");
+    new_entry.operand_count = 2;
+    new_entry.program_counter = (*address);
+    add_to_arraylist(instruction_list, new_entry);
+
+    // 5. Add the final 4-bit chunk.
+    memset(&new_entry, 0, sizeof(Line));
+    new_entry.type = 'I';
+    strcpy(new_entry.opcode, "addi");
+    strncpy(new_entry.operands[0], line_entry->operands[0], sizeof(new_entry.operands[0]) - 1);
+    snprintf(new_entry.operands[1], sizeof(new_entry.operands[1]), "%" PRIu64, chunk5);
+    new_entry.operand_count = 2;
+    new_entry.program_counter = (*address);
+    add_to_arraylist(instruction_list, new_entry);
 }
 
 void resolve_labels(ArrayList *instructions, LabelTable *labels)
@@ -1615,6 +1605,8 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
     int in_code_section = 1; // 1 = .code, 0 = .data
 
     printf("DEBUG: Starting first pass...\n");
+    bool code_section_started = false;
+    bool data_section_started = false;
 
     while (fgets(buffer, sizeof(buffer), fp))
     {
@@ -1628,16 +1620,31 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
         if (strncmp(buffer, ".code", 5) == 0)
         {
             in_code_section = 1;
-            // Set code pointer to the fixed start.
-            *code_address = 0x2000;
-            printf("DEBUG: Entering .code section at address 0x%X\n", *code_address);
+            if (!code_section_started)
+            {
+                *code_address = 0x2000; // Set the starting code address only once.
+                code_section_started = true;
+                printf("DEBUG: Starting .code section at address 0x%X\n", *code_address);
+            }
+            else
+            {
+                printf("DEBUG: Continuing .code section at address 0x%X\n", *code_address);
+            }
             continue;
         }
         if (strncmp(buffer, ".data", 5) == 0)
         {
             in_code_section = 0;
-            *data_address = 0x10000;
-            printf("DEBUG: Entering .data section at address 0x%X\n", *data_address);
+            if (!data_section_started)
+            {
+                *data_address = 0x10000; // Set the starting data address only once.
+                data_section_started = true;
+                printf("DEBUG: Starting .data section at address 0x%X\n", *data_address);
+            }
+            else
+            {
+                printf("DEBUG: Continuing .data section at address 0x%X\n", *data_address);
+            }
             continue;
         }
 
