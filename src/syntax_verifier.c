@@ -7,6 +7,8 @@
 #include "arraylist.h"
 #include "label_table.h"
 #include "line.h"
+#include "tinker_file_header.h"
+
 
 #define MAX_OPERAND_LENGTH 32
 
@@ -21,14 +23,7 @@ typedef struct
     char *format;
     int immediate_signed; // 0 = unsigned immediate; 1 = signed immediate.
 } InstructionInfo;
-typedef struct
-{
-    unsigned int file_type;      // Always 0 for now.
-    unsigned int code_seg_begin; // For this project, code loads at 0x2000.
-    unsigned int code_seg_size;  // In bytes.
-    unsigned int data_seg_begin; // For this project, data loads at 0x10000.
-    unsigned int data_seg_size;  // In bytes.
-} TinkerFileHeader;
+
 // Instruction set – 30 instructions as specified.
 InstructionInfo instructions[] = {
     {"add", 0x18, "R", 0},
@@ -554,7 +549,6 @@ void ull_to_bin_string(unsigned long long value, int bits, char *dest)
     dest[bits] = '\0';
 }
 
-
 int main(int argc, char *argv[])
 {
     if (argc != 3)
@@ -566,8 +560,8 @@ int main(int argc, char *argv[])
     ArrayList instructions;
     initialize_arraylist(&instructions);
     // ---------------- NEW: Separate counters for code and data.
-    int code_address = 0x2000;   // Code section starts at 0x2000.
-    int data_address = 0x10000;  // Data section starts at 0x10000.
+    int code_address = 0x2000;  // Code section starts at 0x2000.
+    int data_address = 0x10000; // Data section starts at 0x10000.
     // ---------------- End NEW
 
     // First pass: Collect labels.
@@ -1681,7 +1675,6 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
     return 0;
 }
 
-
 int process_file_second_pass(const char *input_filename, ArrayList *lines, LabelTable *labels, int *code_address, int *data_address)
 {
     FILE *fp = fopen(input_filename, "r");
@@ -1727,7 +1720,7 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
             continue;
         }
         if (buffer[0] == ':')
-            continue;  // Already handled.
+            continue; // Already handled.
 
         // For data section lines.
         char *firstToken = strtok(buffer, " \t");
@@ -1838,7 +1831,6 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
     fclose(fp);
     return 0;
 }
-
 void write_output_file(const char *output_filename, ArrayList *instructions)
 {
     FILE *fp = fopen(output_filename, "w");
@@ -1848,27 +1840,56 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
         return;
     }
 
-    // Print header to stdout for clarity.
+    // ---------------- NEW: Compute header fields from the instructions array ----------------
+    unsigned int code_size = 0, data_size = 0;
+    for (int i = 0; i < instructions->size; i++)
+    {
+        Line *line = &instructions->lines[i];
+        // For code lines (type 'I') that are not section directives, assume 4 bytes each.
+        if (line->type == 'I' && line->opcode[0] != '.')
+        {
+            code_size += 4;
+        }
+        // For data lines (type 'D') with no operands (i.e. literals), assume 8 bytes each.
+        else if (line->type == 'D' && line->operand_count == 0 && line->opcode[0] != '.')
+        {
+            data_size += 8;
+        }
+    }
+    // Define the header values.
+    unsigned int file_type = 0;
+    unsigned int code_seg_begin = 0x2000;
+    unsigned int data_seg_begin = 0x10000;
+
+    fprintf(fp, "%u\n", file_type);
+    fprintf(fp, "0x%X\n", code_seg_begin);
+    fprintf(fp, "%u\n", code_size);
+    fprintf(fp, "0x%X\n", data_seg_begin);
+    fprintf(fp, "%u\n", data_size);
+    fprintf(fp, "\n");
+
+    // Also print the header to stdout.
     printf("\n----- Final Assembled Output -----\n");
+    printf("%u\n", file_type);
+    printf("0x%X\n", code_seg_begin);
+    printf("%u\n", code_size);
+    printf("0x%X\n", data_seg_begin);
+    printf("%u\n\n", data_size);
+    // ---------------- End NEW Header output ----------------
 
     // Print a single .code section header.
     fprintf(fp, ".code\n");
     printf(".code\n");
 
-    // Loop through instructions and print only code lines (type 'I')
-    // that are not section directives (i.e. opcode does NOT start with '.').
+    // Loop through instructions and output code lines (type 'I')
+    // that are not section directives.
     for (int i = 0; i < instructions->size; i++)
     {
         Line *line = &instructions->lines[i];
-
-        // Only output code instructions and ignore any section directives.
         if (line->type == 'I' && line->opcode[0] != '.')
         {
-            // Print a tab for formatting.
             fprintf(fp, "\t");
             printf("\t");
-
-            // Based on specific formatting rules.
             if ((strcasecmp(line->opcode, "addi") == 0 || strcasecmp(line->opcode, "subi") == 0) &&
                 line->operand_count == 2)
             {
@@ -1927,7 +1948,6 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
             }
             else
             {
-                // General instruction format.
                 fprintf(fp, "%s", line->opcode);
                 printf("%s", line->opcode);
                 for (int j = 0; j < line->operand_count; j++)
@@ -1944,7 +1964,6 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
                     }
                 }
             }
-            // End the instruction line.
             fprintf(fp, "\n");
             printf("\n");
         }
@@ -1954,12 +1973,10 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
     fprintf(fp, ".data\n");
     printf(".data\n");
 
-    // Output data lines that are not section directives.
+    // Output data lines.
     for (int i = 0; i < instructions->size; i++)
     {
         Line *line = &instructions->lines[i];
-
-        // Only output data lines (type 'D') that are not directives.
         if (line->type == 'D' && line->operand_count == 0 && line->opcode[0] != '.')
         {
             unsigned int data = (unsigned int)strtoul(line->opcode, NULL, 0);
@@ -1969,7 +1986,5 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
     }
 
     fclose(fp);
-
-    // Mark the end of the output.
     printf("----- End of Assembled Output -----\n\n");
 }

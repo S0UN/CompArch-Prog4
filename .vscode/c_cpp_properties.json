@@ -4,7 +4,8 @@
             "name": "Mac",
             "includePath": [
                 "${workspaceFolder}/**",
-                "${workspaceFolder}/assembler/lib/uthash-master/src"
+                "${workspaceFolder}/assembler/lib/uthash-master/src",
+                "${workspaceFolder}/include"
             ],
             "defines": [],
             "macFrameworkPath": [

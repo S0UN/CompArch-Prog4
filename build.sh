@@ -11,7 +11,7 @@ chmod +x hw7-asm
 
 
 # Compile the unified executable (syntax_verifier.c now includes binary conversion)
-gcc -o hw7-sim src/tinker3.c 
+gcc -o hw7-sim -Iinclude src/tinker3.c 
 
 # Move the compiled executable to the script's directory (if it's not already there)
 mv hw7-sim "$(dirname "$0")"

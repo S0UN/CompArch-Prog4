@@ -6,10 +6,18 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <string.h>
+#include "tinker_file_header.h"
+
 
 #define MEM (512 * 1024)
 #define NUM_REGISTERS 32
-#define START_ADDRESS 0x1000
+
+// New constants for segment locations.
+#define CODE_START 0x2000
+#define DATA_START 0x10000
+
+// Although START_ADDRESS was used before, we no longer use it for execution.
+//#define START_ADDRESS 0x1000  // (no longer used)
 
 // Global simulated memory and registers.
 uint8_t memory[MEM];
@@ -35,7 +43,7 @@ void mem_write(uint64_t address, uint64_t value)
     }
 }
 
-uint64_t read(uint64_t address)
+uint64_t read_mem(uint64_t address)
 {
     if (address + 7 >= MEM)
     {
@@ -74,8 +82,7 @@ void exec_div(uint8_t rd, uint8_t rs, uint8_t rt)
 {
     if (r[rt] == 0)
     {
-        fprintf(stderr, "Simulation error: Division by zero\n");
-        exit(1);
+        error("Division by zero");
     }
     r[rd] = r[rs] / r[rt];
 }
@@ -115,22 +122,21 @@ void exec_shftli(uint8_t rd, uint64_t L)
 }
 
 // Control Instructions
+// Note: Branch targets must now be at or above CODE_START.
 void exec_br(uint8_t rd, uint64_t *new_pc)
 {
-    if (r[rd] >= MEM)
+    if (r[rd] < CODE_START || r[rd] >= MEM)
     {
-        fprintf(stderr, "Simulation error: Branch target out of bounds\n");
-        exit(1);
+        error("Branch target out of bounds");
     }
     *new_pc = r[rd];
 }
 void exec_brr(uint8_t rd, uint64_t current_pc, uint64_t *new_pc)
 {
     uint64_t target = current_pc + r[rd];
-    if (target >= MEM || target < START_ADDRESS)
+    if (target < CODE_START || target >= MEM)
     {
-        fprintf(stderr, "Simulation error: Branch target out of bounds\n");
-        exit(1);
+        error("Branch target out of bounds");
     }
     *new_pc = target;
 }
@@ -142,10 +148,9 @@ void exec_brrL(uint64_t L, uint64_t current_pc, uint64_t *new_pc)
         offset |= 0xFFFFF000;
     }
     uint64_t target = current_pc + offset;
-    if (target >= MEM || target < START_ADDRESS)
+    if (target < CODE_START || target >= MEM)
     {
-        fprintf(stderr, "Simulation error: Branch target out of bounds\n");
-        exit(1);
+        error("Branch target out of bounds");
     }
     *new_pc = target;
 }
@@ -153,10 +158,9 @@ void exec_brnz(uint8_t rd, uint8_t rs, uint64_t current_pc, uint64_t *new_pc)
 {
     if (r[rs] != 0)
     {
-        if (r[rd] >= MEM || r[rd] < START_ADDRESS)
+        if (r[rd] < CODE_START || r[rd] >= MEM)
         {
-            fprintf(stderr, "Simulation error: Branch target out of bounds\n");
-            exit(1);
+            error("Branch target out of bounds");
         }
         *new_pc = r[rd];
     }
@@ -166,41 +170,34 @@ void exec_call(uint8_t rd, uint64_t current_pc, uint64_t *new_pc)
 {
     if (r[31] < 8)
     {
-        fprintf(stderr, "Simulation error: Stack underflow\n");
-        exit(1);
+        error("Stack underflow");
     }
     if (r[31] + 8 > MEM)
     {
-        fprintf(stderr, "Simulation error: Stack pointer out of bounds\n");
-        exit(1);
+        error("Stack pointer out of bounds");
     }
     *((uint64_t *)(memory + r[31]-8)) = current_pc + 4;
     *new_pc = r[rd];
 }
-
-
 void exec_return(uint64_t *new_pc)
 {
     if (r[31] > MEM - 8)
     {
-        fprintf(stderr, "Simulation error: Stack underflow\n");
-        exit(1);
+        error("Stack underflow");
     }
     *new_pc = *((uint64_t *)(memory + r[31]-8));
 }
-
 void exec_brgt(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *new_pc)
 {
     if ((int64_t)r[rs] > (int64_t)r[rt])
     {
-        if (r[rd] >= MEM || r[rd] < START_ADDRESS)
+        if (r[rd] < CODE_START || r[rd] >= MEM)
         {
-            fprintf(stderr, "Simulation error: Branch target out of bounds\n");
-            exit(1);
+            error("Branch target out of bounds");
         }
         *new_pc = r[rd];
     }
-    // Otherwise, new_pc remains unchanged (caller will add 4)
+    // Otherwise, new_pc remains unchanged.
 }
 
 // Privileged Instruction
@@ -219,15 +216,14 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *pc)
         {
             if (scanf("%" SCNu64, &r[rd]) != 1)
             {
-                fprintf(stderr, "Simulation error: Failed to read input\n");
-                exit(1);
+                error("Failed to read input");
             }
         }
         break;
     case 0x4:
         if (r[rd] == 1)
         {
-            printf("%lu\n", r[rs]); // add newline
+            printf("%" PRIu64 "\n", r[rs]);
         }
         break;
     default:
@@ -236,39 +232,32 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *pc)
     return false;
 }
 
-// Data Movement Instructions
-// mov_rm: Memory-to-register
+// Data Movement Instructions (mov_rm, mov_rr, mov_rl, mov_mr) remain unchanged.
 uint64_t mov_rm(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal)
 {
     int64_t offset = (literal & 0x800) ? ((int64_t)literal | 0xFFFFFFFFFFFFF000ULL) : literal;
     uint64_t address = r[rs] + offset;
-
-    r[rd] = read(address);
+    r[rd] = read_mem(address);
     return pc + 4;
 }
-// mov_rr: Register-to-register
 uint64_t mov_rr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal)
 {
     r[rd] = r[rs];
     return pc + 4;
 }
-// mov_rl: Register literal modification
 uint64_t mov_rl(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal)
 {
     uint64_t mask = 0xFFF;
     r[rd] = (r[rd] & ~mask) | (literal & mask);
     return pc + 4;
 }
-// mov_mr: Register-to-memory
 uint64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal)
 {
-    uint16_t lit12 = literal & 0xFFF; // no extra masking here
-    int64_t offset = (lit12 & 0x800)
-                         ? ((int64_t)lit12 | 0xFFFFFFFFFFFFF000ULL)
-                         : (int64_t)lit12;
+    uint16_t lit12 = literal & 0xFFF;
+    int64_t offset = (lit12 & 0x800) ? ((int64_t)lit12 | 0xFFFFFFFFFFFFF000ULL) : (int64_t)lit12;
     uint64_t address = r[rd] + offset;
-
-   if (address % 8 != 0) {
+    if (address % 8 != 0)
+    {
         error("Memory must be 8-byte aligned.");
     }
     mem_write(address, r[rs]);
@@ -313,24 +302,48 @@ void exec_divf(uint8_t rd, uint8_t rs, uint8_t rt)
     memcpy(&r[rd], &result, sizeof(double));
 }
 
-void firstRead(size_t size, size_t count, FILE *file)
+// ---------------- NEW: load_program() ----------------
+// Reads a binary file produced by your new assembler. The first 20 bytes are the header.
+// The code segment is loaded at CODE_START and the data segment at DATA_START.
+void load_program(const char *filename)
 {
-    size_t bytesRead;
-    uint64_t programCounter = START_ADDRESS;
-    while ((bytesRead = fread((char *)memory + programCounter, size, count, file)) > 0)
+    FILE *file = fopen(filename, "rb");
+    if (!file)
     {
-        programCounter += 4;
-        if (programCounter + 4 > MEM)
-        {
-            error("Program too large for memory");
-        }
+        error("Cannot open program file");
     }
+    TinkerFileHeader header;
+    if (fread(&header, sizeof(header), 1, file) != 1)
+    {
+        error("Failed to read header");
+    }
+    // For debugging, print header (in decimal)
+    printf("Header:\n");
+    printf("%u\n", header.file_type);
+    printf("%u\n", header.code_seg_begin);
+    printf("%u\n", header.code_seg_size);
+    printf("%u\n", header.data_seg_begin);
+    printf("%u\n", header.data_seg_size);
+
+    // Load code segment
+    if (fread(memory + header.code_seg_begin, 1, header.code_seg_size, file) != header.code_seg_size)
+    {
+        error("Failed to read code segment");
+    }
+    // Load data segment
+    if (fread(memory + header.data_seg_begin, 1, header.data_seg_size, file) != header.data_seg_size)
+    {
+        error("Failed to read data segment");
+    }
+    fclose(file);
 }
 
+// ---------------- MODIFIED secondPass() ----------------
+// Execution now starts at CODE_START.
 void secondPass(void)
 {
-    uint64_t pc = START_ADDRESS;
-    uint64_t start = START_ADDRESS;
+    uint64_t pc = CODE_START;
+    uint64_t start = CODE_START;
     bool halted = false;
     while (!halted)
     {
@@ -457,25 +470,26 @@ void secondPass(void)
     }
 }
 
+// ---------------- Modified main() ----------------
 int main(int argc, char *argv[])
 {
     if (argc < 2)
     {
-        fprintf(stderr, "Invalid tinker filepath\n");
+        fprintf(stderr, "Usage: %s <program_file>\n", argv[0]);
         return 1;
     }
-    FILE *file = fopen(argv[1], "rb");
-    if (!file)
-    {
-        fprintf(stderr, "Invalid tinker filepath\n");
-        return 1;
-    }
+
+    // Initialize memory and registers.
     memset(memory, 0, MEM);
     memset(r, 0, sizeof(r));
+    // Set stack pointer (r[31]) to MEM.
     r[31] = MEM;
-    firstRead(4, 1, file);
-    fclose(file);
-    
+
+    // Instead of firstRead(), use load_program() to load a file with header, code, and data.
+    load_program(argv[1]);
+
+    // Begin simulation starting from CODE_START.
     secondPass();
+
     return 0;
 }
