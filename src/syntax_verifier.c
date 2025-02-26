@@ -55,8 +55,7 @@ InstructionInfo instructions[] = {
     {"subf", 0x15, "R", 0},
     {"mulf", 0x16, "R", 0},
     {"divf", 0x17, "R", 0},
-    {NULL, 0, NULL, 0}
-};
+    {NULL, 0, NULL, 0}};
 
 // Helper: Convert a 32-character bit string into a uint32_t.
 uint32_t bitstr_to_uint32(char *bitstr)
@@ -555,6 +554,7 @@ void ull_to_bin_string(unsigned long long value, int bits, char *dest)
     dest[bits] = '\0';
 }
 
+
 int main(int argc, char *argv[])
 {
     if (argc != 3)
@@ -565,10 +565,13 @@ int main(int argc, char *argv[])
 
     ArrayList instructions;
     initialize_arraylist(&instructions);
-    int address = 0; // PC starts at 0x1000
+    // ---------------- NEW: Separate counters for code and data.
+    int code_address = 0x2000;   // Code section starts at 0x2000.
+    int data_address = 0x10000;  // Data section starts at 0x10000.
+    // ---------------- End NEW
 
     // First pass: Collect labels.
-    if (process_file_first_pass(argv[1], &labels, &address) != 0)
+    if (process_file_first_pass(argv[1], &labels, &code_address, &data_address) != 0)
     {
         printf("Error processing file during first pass.\n");
         free_arraylist(&instructions);
@@ -577,7 +580,7 @@ int main(int argc, char *argv[])
     }
 
     // Second pass: Expand macros and collect instructions.
-    if (process_file_second_pass(argv[1], &instructions, labels, &address) != 0)
+    if (process_file_second_pass(argv[1], &instructions, labels, &code_address, &data_address) != 0)
     {
         printf("Error processing file during second pass.\n");
         free_arraylist(&instructions);
@@ -590,7 +593,6 @@ int main(int argc, char *argv[])
     printf("DEBUG: Label resolution complete!\n");
 
     // Write the intermediate assembly output to a temporary file.
-    // (This file will be used as input to the binary converter phase.)
     const char *tempAssembly = "temp.asm";
     write_output_file(tempAssembly, &instructions);
 
@@ -615,13 +617,13 @@ int main(int argc, char *argv[])
 
     int mode = 0; // 1 = code; 2 = data.
     char line[MAX_LINE];
+    unsigned int code_size = 0, data_size = 0;
     while (fgets(line, sizeof(line), fin))
     {
         char *trimmed = line;
         while (isspace(*trimmed))
             trimmed++;
 
-        // Check for section headers.
         if (trimmed[0] == '.')
         {
             if (starts_with(trimmed, ".code"))
@@ -630,7 +632,6 @@ int main(int argc, char *argv[])
                 mode = 2;
             continue;
         }
-        // Skip empty lines.
         if (strlen(trimmed) == 0)
             continue;
 
@@ -639,38 +640,36 @@ int main(int argc, char *argv[])
             char *bin_instr = assemble_instruction(trimmed);
             if (bin_instr)
             {
-                // Convert the 32-character bit string to a uint32_t and write in binary.
-                printf("%s\n", bin_instr);
-
                 uint32_t instr = bitstr_to_uint32(bin_instr);
-                printf("%d\n", instr);
                 fwrite(&instr, sizeof(instr), 1, fout);
+                code_size += sizeof(instr);
                 free(bin_instr);
             }
         }
         else if (mode == 2)
         {
-            // Read the input string as a 64-bit unsigned integer.
             char *endptr;
             unsigned long long value = strtoull(trimmed, &endptr, 0);
-            printf("%llu", value);
-            int32_t temp = (int32_t)value;
-            value = (uint64_t)temp;
-
-            char data_bin[65]; // 64 bits + null terminator.
-
-            ll_to_bin_string(value, 64, data_bin);
-            uint64_t data = bitstr_to_uint64(data_bin);
+            uint64_t data = value;
             fwrite(&data, sizeof(data), 1, fout);
+            data_size += sizeof(data);
         }
     }
-
     fclose(fin);
+
+    // ---------------- NEW: Write header at beginning of binary file ----------------
+    TinkerFileHeader header;
+    header.file_type = 0;
+    header.code_seg_begin = 0x2000;
+    header.code_seg_size = code_size;
+    header.data_seg_begin = 0x10000;
+    header.data_seg_size = data_size;
+    fseek(fout, 0, SEEK_SET);
+    fwrite(&header, sizeof(header), 1, fout);
     fclose(fout);
+    // ---------------- End NEW
 
-    // Optionally remove the temporary file.
     remove(tempAssembly);
-
     return 0;
 }
 
@@ -1584,7 +1583,7 @@ void resolve_labels(ArrayList *instructions, LabelTable *labels)
     }
 }
 
-int process_file_first_pass(const char *input_filename, LabelTable **labels, int *address)
+int process_file_first_pass(const char *input_filename, LabelTable **labels, int *code_address, int *data_address)
 {
     FILE *fp = fopen(input_filename, "r");
     if (!fp)
@@ -1592,7 +1591,6 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
         printf("Error: Could not open input file %s\n", input_filename);
         return 1;
     }
-
     char buffer[256];
     int in_code_section = 1; // 1 = .code, 0 = .data
 
@@ -1610,23 +1608,24 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
         if (strlen(buffer) == 0)
             continue;
 
-        // Handle section directives.
+        // When we see section directives, we set our mode and reset the appropriate counter.
         if (strncmp(buffer, ".code", 5) == 0)
         {
             in_code_section = 1;
-            *address = 0x2000; // Reset the address to the start of the data section.
-            printf("DEBUG: Entering .code section at address %d\n", *address);
+            // Set code pointer to the fixed start.
+            *code_address = 0x2000;
+            printf("DEBUG: Entering .code section at address 0x%X\n", *code_address);
             continue;
         }
         if (strncmp(buffer, ".data", 5) == 0)
         {
             in_code_section = 0;
-            *address = 0x10000; // Reset the address to the start of the data section.
-            printf("DEBUG: Entering .data section at address 0x%X\n", *address);
+            *data_address = 0x10000;
+            printf("DEBUG: Entering .data section at address 0x%X\n", *data_address);
             continue;
         }
 
-        // If the line is a label (starts with ':')
+        // If the line is a label.
         if (buffer[0] == ':')
         {
             if (!validate_label_format(buffer))
@@ -1635,58 +1634,55 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
                 fclose(fp);
                 return 1;
             }
-
-            // Trim the label first.
             char tempLabel[50];
             strncpy(tempLabel, buffer, sizeof(tempLabel) - 1);
             tempLabel[sizeof(tempLabel) - 1] = '\0';
             trim_whitespace(tempLabel);
 
-            // Store the label in the label table.
+            // When storing a label, use the current pointer based on the section.
+            if (in_code_section)
+                store_label(labels, tempLabel + 1, *code_address, in_code_section);
+            else
+                store_label(labels, tempLabel + 1, *data_address, in_code_section);
 
-            store_label(labels, tempLabel + 1, *address, in_code_section);
             int stored_addr = get_label_address(*labels, tempLabel + 1);
             printf("DEBUG: Stored Label -> %s at address %d (retrieved address: %d)\n",
-                   tempLabel + 1, *address, stored_addr);
+                   tempLabel + 1, in_code_section ? *code_address : *data_address, stored_addr);
             print_label_table(*labels);
-
-            printf("DEBUG: Stored Label -> %s at address %d\n", tempLabel + 1, *address);
+            continue;
         }
         else
         {
-            // Increment address for instructions or data.
-            char *line = malloc(strlen(buffer));
-            line = strdup(buffer);
-            char *tkn = malloc(strlen(line));
-            tkn = strtok(line, " ");
-
-            if (strcmp(tkn, "ld") == 0)
+            // Increment the appropriate counter.
+            char *line = strdup(buffer);
+            char *tkn = strtok(line, " ");
+            if (in_code_section)
             {
-                *address += 48;
-            }
-            else if (strcmp(tkn, "push") == 0)
-            {
-                *address += 8;
-            }
-            else if (strcmp(tkn, "pop") == 0)
-            {
-                *address += 8;
+                if (strcmp(tkn, "ld") == 0)
+                    *code_address += 48;
+                else if (strcmp(tkn, "push") == 0 || strcmp(tkn, "pop") == 0)
+                    *code_address += 8;
+                else
+                    *code_address += 4;
             }
             else
             {
-                *address += in_code_section ? 4 : 8;
+                // Data lines increment by 8 bytes.
+                *data_address += 8;
             }
-            printf("DEBUG: Processed instruction/data, updated address to %d\n", *address);
+            printf("DEBUG: Processed instruction/data, updated address to %d (in %s)\n",
+                   in_code_section ? *code_address : *data_address,
+                   in_code_section ? "code" : "data");
+            free(line);
         }
     }
-
     printf("DEBUG: First pass completed.\n");
-
     fclose(fp);
     return 0;
 }
 
-int process_file_second_pass(const char *input_filename, ArrayList *lines, LabelTable *labels, int *address)
+
+int process_file_second_pass(const char *input_filename, ArrayList *lines, LabelTable *labels, int *code_address, int *data_address)
 {
     FILE *fp = fopen(input_filename, "r");
     if (!fp)
@@ -1694,94 +1690,64 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
         printf("Error: Could not open input file %s\n", input_filename);
         return 1;
     }
-
     char buffer[256];
-    char original_buffer[256]; // Save original line for validation
-    int in_code_section = 1;   // 1 = .code, 0 = .data
+    char original_buffer[256];
+    int in_code_section = 1; // 1 = .code, 0 = .data
 
     while (fgets(buffer, sizeof(buffer), fp))
     {
         validate_spacing(buffer);
-
-        strcpy(original_buffer, buffer); // Save the original line
+        strcpy(original_buffer, buffer);
         remove_comments(buffer);
         trim_whitespace(buffer);
         if (strlen(buffer) == 0)
             continue;
 
-        // Handle section directives.
         if (strncmp(buffer, ".code", 5) == 0)
         {
             in_code_section = 1;
-
-            // Add .code directive to the array list
             Line section_line;
             memset(&section_line, 0, sizeof(Line));
             strcpy(section_line.opcode, ".code");
-            section_line.type = 'I'; // Mark as instruction section
-            section_line.program_counter = *address;
+            section_line.type = 'I';
+            // Use the current code_address.
+            section_line.program_counter = *code_address;
             add_to_arraylist(lines, section_line);
-
             continue;
         }
         if (strncmp(buffer, ".data", 5) == 0)
         {
             in_code_section = 0;
-
-            // Add .data directive to the array list
             Line section_line;
             memset(&section_line, 0, sizeof(Line));
             strcpy(section_line.opcode, ".data");
-            section_line.type = 'D'; // Mark as data section
-            section_line.program_counter = *address;
+            section_line.type = 'D';
+            section_line.program_counter = *data_address;
             add_to_arraylist(lines, section_line);
-
             continue;
         }
-
-        // If the line is a label (starts with ':'), skip it (already processed in the first pass).
         if (buffer[0] == ':')
-        {
-            continue;
-        }
+            continue;  // Already handled.
 
-        // For data section, if the line consists solely of a number, treat it as a data literal.
+        // For data section lines.
         char *firstToken = strtok(buffer, " \t");
-        if (firstToken && firstToken[0] == '-')
-        {
-            fprintf(stderr, "Error: Negative values are not allowed.\n");
-            exit(1);
-        }
-
         if (!in_code_section && (isdigit(firstToken[0])))
         {
             Line data_line;
             memset(&data_line, 0, sizeof(Line));
-            data_line.program_counter = *address;
-            data_line.size = 8; // Data items take 8 bytes.
+            data_line.program_counter = *data_address;
+            data_line.size = 8;
             data_line.type = 'D';
-            // Save the literal as an integer value.
             data_line.literal = (unsigned int)strtoul(firstToken, NULL, 0);
-            // Store the literal as text in the opcode field (so we can print it).
             snprintf(data_line.opcode, sizeof(data_line.opcode), "%d", data_line.literal);
             data_line.operand_count = 0;
             add_to_arraylist(lines, data_line);
-            // *address += 8;
             continue;
         }
-
         // Otherwise, process as an instruction.
-        // Restore the original buffer for tokenization/validation.
         strcpy(buffer, original_buffer);
         remove_comments(buffer);
         trim_whitespace(buffer);
-
-        // Check if there's a '-' anywhere in the line
-        if (strchr(original_buffer, '-') != NULL)
-        {
-            fprintf(stderr, "Error: Negative values are not allowed anywhere in the line.\n");
-            exit(1);
-        }
         char *token = strtok(buffer, " \t");
         if (!token)
         {
@@ -1789,43 +1755,35 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
             fclose(fp);
             return 1;
         }
-
         printf("\nDEBUG: Tokenized Instruction -> %s\n", token);
-
         Line line_entry;
         memset(&line_entry, 0, sizeof(Line));
-        line_entry.program_counter = *address;
+        // Set the program counter from the correct counter.
+        line_entry.program_counter = in_code_section ? *code_address : *data_address;
         line_entry.size = in_code_section ? 4 : 8;
         line_entry.type = in_code_section ? 'I' : 'D';
         line_entry.from_call = 0;
-
-        // Check if the instruction is a macro.
         if (strcasecmp(token, "halt") == 0)
         {
-            // Special-case: halt takes no operands.
             strcpy(line_entry.opcode, token);
             line_entry.operand_count = 0;
             char *validateCopy = strdup(original_buffer);
             if (!validateCopy)
                 error("Memory allocation failed during macro validation");
-            validate_macro_instruction(validateCopy); // Should succeed.
+            validate_macro_instruction(validateCopy);
             free(validateCopy);
-            expand_macro(&line_entry, lines, address);
+            expand_macro(&line_entry, lines, in_code_section ? code_address : data_address);
         }
         else if (validate_macro(token))
         {
-            // Validate macro using a duplicate.
             char *validateCopy = strdup(original_buffer);
             if (!validateCopy)
                 error("Memory allocation failed during macro validation");
             validate_macro_instruction(validateCopy);
             free(validateCopy);
-
-            // Duplicate the original line for tokenization.
             char *macroLine = strdup(original_buffer);
             if (!macroLine)
                 error("Memory allocation failed during macro expansion tokenization");
-
             char *macroToken = strtok(macroLine, " \t");
             strcpy(line_entry.opcode, macroToken);
             int opCount = 0;
@@ -1841,8 +1799,7 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
             }
             line_entry.operand_count = opCount;
             free(macroLine);
-
-            expand_macro(&line_entry, lines, address);
+            expand_macro(&line_entry, lines, in_code_section ? code_address : data_address);
         }
         else
         {
@@ -1851,9 +1808,7 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
             while ((token = strtok(NULL, " \t,")) != NULL && opCount < 4)
             {
                 if (isMemoryOperand(token))
-                {
                     strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
-                }
                 else if (token[0] == 'r' && isValidRegister(token))
                 {
                     strncpy(line_entry.registers[opCount], token, sizeof(line_entry.registers[opCount]) - 1);
@@ -1870,9 +1825,7 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
                     strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
                 }
                 else
-                {
                     strncpy(line_entry.operands[opCount], token, sizeof(line_entry.operands[opCount]) - 1);
-                }
                 printf("DEBUG: Operand[%d]: %s\n", opCount, token);
                 opCount++;
             }
@@ -1880,10 +1833,8 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
             remove_comments(original_buffer);
             validate_instruction(original_buffer);
             add_to_arraylist(lines, line_entry);
-            // *address += in_code_section ? 4 : 8;
         }
     }
-
     fclose(fp);
     return 0;
 }
