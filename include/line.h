@@ -11,7 +11,7 @@ typedef struct {
     char type;             // 'I' = instruction, 'D' = data
     char opcode[10];       // Opcode (e.g., "add", "ld")
     char registers[3][20];  // Up to 3 registers (e.g., "r1", "r2", "r3")
-    int literal;           // Literal value (if any)
+    uint64_t literal;           // Literal value (if any)
     char label[20];        // Label operand (if any, e.g., ":L1")
     int program_counter;   // Memory address for the instruction or data
     int size;              // 4 bytes for instructions, 8 bytes for data items

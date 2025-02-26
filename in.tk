@@ -1,18 +1,3 @@
 .code
-	add r1, r2, r3
-	add r1, r2, r3
-	add r1, r2, r3
-	add r1, r2, r3
-	add r1, r2, r3
-	add r1, r2, r3
-	add r1, r2, r3
 .data
-:N0
-	8
-	10
-	1345134513
-.code
-	add r1, r2, r3
-	add r1, r2, r3
-	ld r5, :N0
-	halt
+	18446744073709551615

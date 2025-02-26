@@ -2007,8 +2007,8 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
         Line *line = &instructions->lines[i];
         if (line->type == 'D' && line->operand_count == 0 && line->opcode[0] != '.')
         {
-            fprintf(fp, "\t%" PRId64 "\n", line->literal);
-            printf("\t%" PRId64 "\n", line->literal);
+            fprintf(fp, "\t%llu\n", (unsigned long long)line->literal);
+            printf("\t%llu\n", (unsigned long long)line->literal);
         }
     }
 
