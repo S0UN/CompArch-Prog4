@@ -673,7 +673,6 @@ int main(int argc, char *argv[])
             int64_t value = strtoll(trimmed, &endptr, 0);
             fwrite(&value, sizeof(value), 1, fout);
             data_size += sizeof(value);
-            
         }
     }
     fclose(fin);
@@ -1747,19 +1746,23 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
 
         // For data section lines.
         char *firstToken = strtok(buffer, " \t");
-        if (!in_code_section && (isdigit(firstToken[0])))
+        if (!in_code_section && isdigit(firstToken[0]))
         {
             Line data_line;
             memset(&data_line, 0, sizeof(Line));
             data_line.program_counter = *data_address;
             data_line.size = 8;
             data_line.type = 'D';
-            data_line.literal = (unsigned int)strtoul(firstToken, NULL, 0);
-            snprintf(data_line.opcode, sizeof(data_line.opcode), "%d", data_line.literal);
+            // Use strtoull to get a 64-bit value:
+            uint64_t literal = strtoull(firstToken, NULL, 0);
+            data_line.literal = literal;
+            // Print the literal using the proper 64-bit format specifier:
+            snprintf(data_line.opcode, sizeof(data_line.opcode), "%" PRIu64, literal);
             data_line.operand_count = 0;
             add_to_arraylist(lines, data_line);
             continue;
         }
+
         // Otherwise, process as an instruction.
         strcpy(buffer, original_buffer);
         remove_comments(buffer);
@@ -1893,11 +1896,11 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
 
     // Also print the header to stdout.
     printf("\n----- Final Assembled Output -----\n");
-    printf("%u\n", file_type);
+    printf("%luu\n", file_type);
     printf("0x%X\n", code_seg_begin);
-    printf("%u\n", code_size);
+    printf("%llu\n", code_size);
     printf("0x%X\n", data_seg_begin);
-    printf("%u\n\n", data_size);
+    printf("%llu\n\n", data_size);
     // ---------------- End NEW Header output ----------------
 
     // Print a single .code section header.
