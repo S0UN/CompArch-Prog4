@@ -12,8 +12,6 @@
 
 LabelTable *labels = NULL;
 
-
-
 #define MAX_LINE 256
 
 typedef struct
@@ -23,13 +21,20 @@ typedef struct
     char *format;
     int immediate_signed; // 0 = unsigned immediate; 1 = signed immediate.
 } InstructionInfo;
-
+typedef struct
+{
+    unsigned int file_type;      // Always 0 for now.
+    unsigned int code_seg_begin; // For this project, code loads at 0x2000.
+    unsigned int code_seg_size;  // In bytes.
+    unsigned int data_seg_begin; // For this project, data loads at 0x10000.
+    unsigned int data_seg_size;  // In bytes.
+} TinkerFileHeader;
 // Instruction set – 30 instructions as specified.
 InstructionInfo instructions[] = {
     {"add", 0x18, "R", 0},
-    {"addi", 0x19, "I", 0}, // unsigned immediate
+    {"addi", 0x19, "I", 0},
     {"sub", 0x1a, "R", 0},
-    {"subi", 0x1b, "I", 0}, // unsigned immediate
+    {"subi", 0x1b, "I", 0},
     {"mul", 0x1c, "R", 0},
     {"div", 0x1d, "R", 0},
     {"and", 0x0, "R", 0},
@@ -37,20 +42,21 @@ InstructionInfo instructions[] = {
     {"xor", 0x2, "R", 0},
     {"not", 0x3, "R2", 0},
     {"shftr", 0x4, "R", 0},
-    {"shftri", 0x5, "I", 0}, // unsigned immediate
+    {"shftri", 0x5, "I", 0},
     {"shftl", 0x6, "R", 0},
-    {"shftli", 0x7, "I", 0}, // unsigned immediate
+    {"shftli", 0x7, "I", 0},
     {"br", 0x8, "U", 0},
     {"brnz", 0xb, "R2", 0},
     {"call", 0xc, "U", 0},
     {"return", 0xd, "N", 0},
     {"brgt", 0xe, "R", 0},
-    {"priv", 0xf, "P", 1}, // assume its immediate is signed
+    {"priv", 0xf, "P", 1},
     {"addf", 0x14, "R", 0},
     {"subf", 0x15, "R", 0},
     {"mulf", 0x16, "R", 0},
     {"divf", 0x17, "R", 0},
-    {NULL, 0, NULL, 0}};
+    {NULL, 0, NULL, 0}
+};
 
 // Helper: Convert a 32-character bit string into a uint32_t.
 uint32_t bitstr_to_uint32(char *bitstr)
@@ -559,7 +565,7 @@ int main(int argc, char *argv[])
 
     ArrayList instructions;
     initialize_arraylist(&instructions);
-    int address = 0x1000; // PC starts at 0x1000
+    int address = 0; // PC starts at 0x1000
 
     // First pass: Collect labels.
     if (process_file_first_pass(argv[1], &labels, &address) != 0)
@@ -1596,7 +1602,7 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
     {
         remove_comments(buffer);
         trim_whitespace(buffer);
-           if (strchr(buffer, '-') != NULL)
+        if (strchr(buffer, '-') != NULL)
         {
             fprintf(stderr, "Error: Negative values are not allowed anywhere in the line.\n");
             exit(1);
@@ -1608,13 +1614,15 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
         if (strncmp(buffer, ".code", 5) == 0)
         {
             in_code_section = 1;
+            *address = 0x2000; // Reset the address to the start of the data section.
             printf("DEBUG: Entering .code section at address %d\n", *address);
             continue;
         }
         if (strncmp(buffer, ".data", 5) == 0)
         {
             in_code_section = 0;
-            printf("DEBUG: Entering .data section at address %d\n", *address);
+            *address = 0x10000; // Reset the address to the start of the data section.
+            printf("DEBUG: Entering .data section at address 0x%X\n", *address);
             continue;
         }
 
@@ -1627,7 +1635,6 @@ int process_file_first_pass(const char *input_filename, LabelTable **labels, int
                 fclose(fp);
                 return 1;
             }
-
 
             // Trim the label first.
             char tempLabel[50];
@@ -1880,6 +1887,7 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
     fclose(fp);
     return 0;
 }
+
 void write_output_file(const char *output_filename, ArrayList *instructions)
 {
     FILE *fp = fopen(output_filename, "w");
@@ -1889,97 +1897,128 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
         return;
     }
 
-// Define a macro that prints to both the file and stdout.
-#define PRINT_BOTH(fmt, ...)             \
-    do                                   \
-    {                                    \
-        fprintf(fp, fmt, ##__VA_ARGS__); \
-        printf(fmt, ##__VA_ARGS__);      \
-    } while (0)
+    // Print header to stdout for clarity.
+    printf("\n----- Final Assembled Output -----\n");
 
+    // Print a single .code section header.
+    fprintf(fp, ".code\n");
+    printf(".code\n");
+
+    // Loop through instructions and print only code lines (type 'I')
+    // that are not section directives (i.e. opcode does NOT start with '.').
     for (int i = 0; i < instructions->size; i++)
     {
         Line *line = &instructions->lines[i];
 
-        // If it's .code or .data, print without indentation.
-        if (strcasecmp(line->opcode, ".code") == 0 || strcasecmp(line->opcode, ".data") == 0)
+        // Only output code instructions and ignore any section directives.
+        if (line->type == 'I' && line->opcode[0] != '.')
         {
-            PRINT_BOTH("%s\n", line->opcode);
-            continue;
-        }
+            // Print a tab for formatting.
+            fprintf(fp, "\t");
+            printf("\t");
 
-        // If this is a data line (type 'D' with no operands),
-        // treat the opcode field as containing the literal (as text),
-        // convert it to an unsigned int, and print it.
-        if (line->type == 'D' && line->operand_count == 0)
-        {
-            // Using strtoul to convert the text to an unsigned int.
-            unsigned int data = (unsigned int)strtoul(line->opcode, NULL, 0);
-            PRINT_BOTH("%u\n", data);
-            continue;
-        }
-
-        // Otherwise, assume it's a code instruction.
-        PRINT_BOTH("\t");
-
-        // Formatting based on instruction type.
-        if ((strcasecmp(line->opcode, "addi") == 0 || strcasecmp(line->opcode, "subi") == 0) &&
-            line->operand_count == 2)
-        {
-            PRINT_BOTH("%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
-        }
-        else if (strcasecmp(line->opcode, "mov") == 0 && line->operand_count == 2)
-        {
-            PRINT_BOTH("mov %s, %s", line->operands[0], line->operands[1]);
-        }
-        else if (strcasecmp(line->opcode, "xor") == 0 && line->operand_count == 3)
-        {
-            PRINT_BOTH("xor %s, %s, %s", line->operands[0], line->operands[1], line->operands[2]);
-        }
-        else if (strcasecmp(line->opcode, "shftli") == 0 && line->operand_count == 2)
-        {
-            PRINT_BOTH("shftli %s, %s", line->operands[0], line->operands[1]);
-        }
-        else if (strcasecmp(line->opcode, "st") == 0 || strcasecmp(line->opcode, "ld") == 0)
-        {
-            PRINT_BOTH("%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
-            if (line->operand_count == 3)
-                PRINT_BOTH(", %s", line->operands[2]);
-        }
-        else if (strcasecmp(line->opcode, "trap") == 0)
-        {
-            PRINT_BOTH("trap %s", line->operands[0]);
-        }
-        else if (strcasecmp(line->opcode, "br") == 0)
-        {
-            if (line->label[0] != '\0')
-                PRINT_BOTH("br %s", line->label);
-            else
-                PRINT_BOTH("br %s", line->operands[0]);
-        }
-        else if (strcasecmp(line->opcode, "priv") == 0 && line->operand_count == 4)
-        {
-            PRINT_BOTH("priv %s, %s, %s, %s", line->operands[0],
-                       line->operands[1], line->operands[2], line->operands[3]);
-        }
-        else
-        {
-            // General instruction format.
-            PRINT_BOTH("%s", line->opcode);
-            for (int j = 0; j < line->operand_count; j++)
+            // Based on specific formatting rules.
+            if ((strcasecmp(line->opcode, "addi") == 0 || strcasecmp(line->opcode, "subi") == 0) &&
+                line->operand_count == 2)
             {
-                if (j == 0)
-                    PRINT_BOTH(" %s", line->operands[j]);
-                else
-                    PRINT_BOTH(", %s", line->operands[j]);
+                fprintf(fp, "%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
+                printf("%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
             }
+            else if (strcasecmp(line->opcode, "mov") == 0 && line->operand_count == 2)
+            {
+                fprintf(fp, "mov %s, %s", line->operands[0], line->operands[1]);
+                printf("mov %s, %s", line->operands[0], line->operands[1]);
+            }
+            else if (strcasecmp(line->opcode, "xor") == 0 && line->operand_count == 3)
+            {
+                fprintf(fp, "xor %s, %s, %s", line->operands[0], line->operands[1], line->operands[2]);
+                printf("xor %s, %s, %s", line->operands[0], line->operands[1], line->operands[2]);
+            }
+            else if (strcasecmp(line->opcode, "shftli") == 0 && line->operand_count == 2)
+            {
+                fprintf(fp, "shftli %s, %s", line->operands[0], line->operands[1]);
+                printf("shftli %s, %s", line->operands[0], line->operands[1]);
+            }
+            else if (strcasecmp(line->opcode, "st") == 0 || strcasecmp(line->opcode, "ld") == 0)
+            {
+                fprintf(fp, "%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
+                printf("%s %s, %s", line->opcode, line->operands[0], line->operands[1]);
+                if (line->operand_count == 3)
+                {
+                    fprintf(fp, ", %s", line->operands[2]);
+                    printf(", %s", line->operands[2]);
+                }
+            }
+            else if (strcasecmp(line->opcode, "trap") == 0)
+            {
+                fprintf(fp, "trap %s", line->operands[0]);
+                printf("trap %s", line->operands[0]);
+            }
+            else if (strcasecmp(line->opcode, "br") == 0)
+            {
+                if (line->label[0] != '\0')
+                {
+                    fprintf(fp, "br %s", line->label);
+                    printf("br %s", line->label);
+                }
+                else
+                {
+                    fprintf(fp, "br %s", line->operands[0]);
+                    printf("br %s", line->operands[0]);
+                }
+            }
+            else if (strcasecmp(line->opcode, "priv") == 0 && line->operand_count == 4)
+            {
+                fprintf(fp, "priv %s, %s, %s, %s", line->operands[0],
+                        line->operands[1], line->operands[2], line->operands[3]);
+                printf("priv %s, %s, %s, %s", line->operands[0],
+                       line->operands[1], line->operands[2], line->operands[3]);
+            }
+            else
+            {
+                // General instruction format.
+                fprintf(fp, "%s", line->opcode);
+                printf("%s", line->opcode);
+                for (int j = 0; j < line->operand_count; j++)
+                {
+                    if (j == 0)
+                    {
+                        fprintf(fp, " %s", line->operands[j]);
+                        printf(" %s", line->operands[j]);
+                    }
+                    else
+                    {
+                        fprintf(fp, ", %s", line->operands[j]);
+                        printf(", %s", line->operands[j]);
+                    }
+                }
+            }
+            // End the instruction line.
+            fprintf(fp, "\n");
+            printf("\n");
         }
-
-        // Add a newline after each instruction.
-        PRINT_BOTH("\n");
     }
 
-#undef PRINT_BOTH
+    // Print a single .data section header.
+    fprintf(fp, ".data\n");
+    printf(".data\n");
+
+    // Output data lines that are not section directives.
+    for (int i = 0; i < instructions->size; i++)
+    {
+        Line *line = &instructions->lines[i];
+
+        // Only output data lines (type 'D') that are not directives.
+        if (line->type == 'D' && line->operand_count == 0 && line->opcode[0] != '.')
+        {
+            unsigned int data = (unsigned int)strtoul(line->opcode, NULL, 0);
+            fprintf(fp, "\t%u\n", data);
+            printf("\t%u\n", data);
+        }
+    }
 
     fclose(fp);
+
+    // Mark the end of the output.
+    printf("----- End of Assembled Output -----\n\n");
 }
