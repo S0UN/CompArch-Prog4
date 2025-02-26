@@ -2007,10 +2007,8 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
         Line *line = &instructions->lines[i];
         if (line->type == 'D' && line->operand_count == 0 && line->opcode[0] != '.')
         {
-            // Use strtoll to correctly convert a signed 64-bit value.
-            int64_t data = strtoll(line->opcode, NULL, 0);
-            fprintf(fp, "\t%" PRId64 "\n", data);
-            printf("\t%" PRId64 "\n", data);
+            fprintf(fp, "\t%" PRId64 "\n", line->literal);
+            printf("\t%" PRId64 "\n", line->literal);
         }
     }
 
