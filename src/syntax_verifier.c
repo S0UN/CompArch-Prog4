@@ -668,7 +668,8 @@ int main(int argc, char *argv[])
         else if (mode == 2)
         {
             char *endptr;
-            uint64_t value = strtoll(trimmed, &endptr, 0);
+            uint64_t value = strtoull(trimmed, &endptr, 0);
+
             fwrite(&value, sizeof(value), 1, fout);
             data_size += sizeof(value);
         }
