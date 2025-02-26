@@ -622,7 +622,7 @@ int main(int argc, char *argv[])
         {
             if (starts_with(trimmed, ".code"))
                 mode = 1;
-            else if (starts_with(trimmed, ".data"))
+            else 
                 mode = 2;
             continue;
         }
