@@ -1756,8 +1756,9 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
             // Use strtoull to get a 64-bit value:
             uint64_t literal = strtoull(firstToken, NULL, 0);
             data_line.literal = literal;
-            // Print the literal using the proper 64-bit format specifier:
-            snprintf(data_line.opcode, sizeof(data_line.opcode), "%" PRIu64, literal);
+
+            printf("\nLITERAL  %llu\n", data_line.literal);
+
             data_line.operand_count = 0;
             add_to_arraylist(lines, data_line);
             continue;
@@ -1857,6 +1858,7 @@ int process_file_second_pass(const char *input_filename, ArrayList *lines, Label
     fclose(fp);
     return 0;
 }
+
 void write_output_file(const char *output_filename, ArrayList *instructions)
 {
     FILE *fp = fopen(output_filename, "w");
@@ -1867,7 +1869,7 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
     }
 
     // ---------------- NEW: Compute header fields from the instructions array ----------------
-    unsigned int code_size = 0, data_size = 0;
+    uint64_t code_size = 0, data_size = 0;
     for (int i = 0; i < instructions->size; i++)
     {
         Line *line = &instructions->lines[i];
@@ -1882,33 +1884,33 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
             data_size += 8;
         }
     }
-    // Define the header values.
-    unsigned int file_type = 0;
-    unsigned int code_seg_begin = 0x2000;
-    unsigned int data_seg_begin = 0x10000;
+    // Define the header values (all 64-bit).
+    uint64_t file_type = 0;
+    uint64_t code_seg_begin = 0x2000;
+    uint64_t data_seg_begin = 0x10000;
 
-    fprintf(fp, "%u\n", file_type);
-    fprintf(fp, "0x%X\n", code_seg_begin);
-    fprintf(fp, "%u\n", code_size);
-    fprintf(fp, "0x%X\n", data_seg_begin);
-    fprintf(fp, "%u\n", data_size);
+    // Write the header as 5 64-bit values (each on its own line) plus a blank line.
+    fprintf(fp, "%" PRIu64 "\n", file_type);
+    fprintf(fp, "0x%" PRIX64 "\n", code_seg_begin);
+    fprintf(fp, "%" PRIu64 "\n", code_size);
+    fprintf(fp, "0x%" PRIX64 "\n", data_seg_begin);
+    fprintf(fp, "%" PRIu64 "\n", data_size);
     fprintf(fp, "\n");
 
     // Also print the header to stdout.
     printf("\n----- Final Assembled Output -----\n");
-    printf("%luu\n", file_type);
-    printf("0x%X\n", code_seg_begin);
-    printf("%llu\n", code_size);
-    printf("0x%X\n", data_seg_begin);
-    printf("%llu\n\n", data_size);
+    printf("%" PRIu64 "\n", file_type);
+    printf("0x%" PRIX64 "\n", code_seg_begin);
+    printf("%" PRIu64 "\n", code_size);
+    printf("0x%" PRIX64 "\n", data_seg_begin);
+    printf("%" PRIu64 "\n\n", data_size);
     // ---------------- End NEW Header output ----------------
 
-    // Print a single .code section header.
+    // Print the .code section header.
     fprintf(fp, ".code\n");
     printf(".code\n");
 
-    // Loop through instructions and output code lines (type 'I')
-    // that are not section directives.
+    // Loop through instructions and output code lines (type 'I') that are not section directives.
     for (int i = 0; i < instructions->size; i++)
     {
         Line *line = &instructions->lines[i];
@@ -1995,7 +1997,7 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
         }
     }
 
-    // Print a single .data section header.
+    // Print the .data section header.
     fprintf(fp, ".data\n");
     printf(".data\n");
 
@@ -2005,9 +2007,10 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
         Line *line = &instructions->lines[i];
         if (line->type == 'D' && line->operand_count == 0 && line->opcode[0] != '.')
         {
-            unsigned int data = (unsigned int)strtoul(line->opcode, NULL, 0);
-            fprintf(fp, "\t%u\n", data);
-            printf("\t%u\n", data);
+            // Use strtoll to correctly convert a signed 64-bit value.
+            int64_t data = strtoll(line->opcode, NULL, 0);
+            fprintf(fp, "\t%" PRId64 "\n", data);
+            printf("\t%" PRId64 "\n", data);
         }
     }
 
