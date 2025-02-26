@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <strings.h>
 #include <stdio.h>
+#include <stdint.h>
+
 
 // Structure to store an instruction, label, or data entry
 typedef struct {
