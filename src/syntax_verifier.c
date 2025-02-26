@@ -549,6 +549,24 @@ void ull_to_bin_string(unsigned long long value, int bits, char *dest)
     dest[bits] = '\0';
 }
 
+
+#include "syntax_verifier.h"
+#include "arraylist.h"
+#include "label_table.h"
+#include "line.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <stdbool.h>
+#include <strings.h>
+#include <stdint.h>
+#include <inttypes.h>
+#include <string.h>
+
+#define MAX_LINE 256
+
+// Header structure now uses 64-bit fields.
+
 int main(int argc, char *argv[])
 {
     if (argc != 3)
@@ -560,12 +578,12 @@ int main(int argc, char *argv[])
     ArrayList instructions;
     initialize_arraylist(&instructions);
     // ---------------- NEW: Separate counters for code and data.
-    int code_address = 0x2000;  // Code section starts at 0x2000.
-    int data_address = 0x10000; // Data section starts at 0x10000.
+    uint64_t code_address = 0x2000;   // Code section starts at 0x2000.
+    uint64_t data_address = 0x10000;  // Data section starts at 0x10000.
     // ---------------- End NEW
 
     // First pass: Collect labels.
-    if (process_file_first_pass(argv[1], &labels, &code_address, &data_address) != 0)
+    if (process_file_first_pass(argv[1], &labels, (int *)&code_address, (int *)&data_address) != 0)
     {
         printf("Error processing file during first pass.\n");
         free_arraylist(&instructions);
@@ -574,7 +592,7 @@ int main(int argc, char *argv[])
     }
 
     // Second pass: Expand macros and collect instructions.
-    if (process_file_second_pass(argv[1], &instructions, labels, &code_address, &data_address) != 0)
+    if (process_file_second_pass(argv[1], &instructions, labels, (int *)&code_address, (int *)&data_address) != 0)
     {
         printf("Error processing file during second pass.\n");
         free_arraylist(&instructions);
@@ -609,20 +627,31 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    // ---------------- NEW: Reserve space for the header (5 fields × 8 bytes = 40 bytes).
+    TinkerFileHeader dummy = {0, 0, 0, 0, 0};
+    fwrite(&dummy, sizeof(dummy), 1, fout);
+
     int mode = 0; // 1 = code; 2 = data.
     char line[MAX_LINE];
-    unsigned int code_size = 0, data_size = 0;
+    uint64_t code_size = 0, data_size = 0;
+    // Assume write_output_file() prints a header of 6 lines (header fields plus a blank line)
+    int header_lines = 6;
     while (fgets(line, sizeof(line), fin))
     {
+        // Skip header lines.
+        if (header_lines > 0)
+        {
+            header_lines--;
+            continue;
+        }
         char *trimmed = line;
         while (isspace(*trimmed))
             trimmed++;
-
         if (trimmed[0] == '.')
         {
             if (starts_with(trimmed, ".code"))
                 mode = 1;
-            else 
+            else if (starts_with(trimmed, ".data"))
                 mode = 2;
             continue;
         }
@@ -651,7 +680,7 @@ int main(int argc, char *argv[])
     }
     fclose(fin);
 
-    // ---------------- NEW: Write header at beginning of binary file ----------------
+    // ---------------- NEW: Write the header (as 5 64-bit values) at the beginning.
     TinkerFileHeader header;
     header.file_type = 0;
     header.code_seg_begin = 0x2000;
