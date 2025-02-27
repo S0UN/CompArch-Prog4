@@ -5,6 +5,7 @@
         "strings.h": "c",
         "stdint.h": "c",
         "errno.h": "c",
-        "arraylist.h": "c"
+        "arraylist.h": "c",
+        "tinker_file_header.h": "c"
     }
 }

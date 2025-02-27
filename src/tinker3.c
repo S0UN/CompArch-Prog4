@@ -26,7 +26,10 @@ void error(const char *message)
 // Global write function: writes a 64-bit value to memory in little-endian order.
 void mem_write(uint64_t address, uint64_t value)
 {
-
+    if (address + 7 >= MEM)
+    {
+        error("Memory access out of bounds.");
+    }
     for (int i = 0; i < 8; i++)
     {
         memory[address + i] = (value >> (8 * i)) & 0xFF;
@@ -35,7 +38,10 @@ void mem_write(uint64_t address, uint64_t value)
 
 uint64_t read(uint64_t address)
 {
-
+    if (address + 7 >= MEM)
+    {
+        error("Memory access out of bounds.");
+    }
     uint64_t value = 0;
     for (int i = 0; i < 8; i++)
     {
@@ -321,17 +327,26 @@ void firstRead(size_t size, size_t count, FILE *file)
         }
     }
 }
-void secondPass_simulation(uint64_t start_pc) {
+
+void secondPass(uint64_t start_pc)
+{
     uint64_t pc = start_pc;
     uint64_t start = start_pc;
     bool halted = false;
-    while (!halted) {
+    while (!halted)
+    {
         if (pc + 4 > MEM)
+        {
             error("PC out of bounds");
+        }
         if (pc % 4 != 0)
+        {
             error("Unaligned PC");
+        }
         if (pc < start)
+        {
             error("PC underflow");
+        }
         uint32_t instruction = *((uint32_t *)(memory + pc));
         uint8_t opcode = (instruction >> 27) & 0x1F;
         uint8_t rd = (instruction >> 22) & 0x1F;
@@ -339,62 +354,128 @@ void secondPass_simulation(uint64_t start_pc) {
         uint8_t rt = (instruction >> 12) & 0x1F;
         uint16_t literal = instruction & 0xFFF;
         uint64_t next_pc = pc + 4;
-        switch (opcode) {
-            case 0x18: exec_add(rd, rs, rt); break;
-            case 0x19: exec_addi(rd, literal); break;
-            case 0x1A: exec_sub(rd, rs, rt); break;
-            case 0x1B: exec_subi(rd, literal); break;
-            case 0x1C: exec_mul(rd, rs, rt); break;
-            case 0x1D: exec_div(rd, rs, rt); break;
-            case 0x00: exec_and(rd, rs, rt); break;
-            case 0x01: exec_or(rd, rs, rt); break;
-            case 0x02: exec_xor(rd, rs, rt); break;
-            case 0x03: exec_not(rd, rs); break;
-            case 0x04: exec_shftr(rd, rs, rt); break;
-            case 0x05: exec_shftri(rd, literal); break;
-            case 0x06: exec_shftl(rd, rs, rt); break;
-            case 0x07: exec_shftli(rd, literal); break;
-            case 0x08: exec_br(rd, &next_pc); break;
-            case 0x09: exec_brr(rd, pc, &next_pc); break;
-            case 0x0A: exec_brrL(literal, pc, &next_pc); break;
-            case 0x0B: exec_brnz(rd, rs, pc, &next_pc); break;
-            case 0x0C: exec_call(rd, pc, &next_pc); break;
-            case 0x0D: exec_return(&next_pc); break;
-            case 0x0E: exec_brgt(rd, rs, rt, &next_pc); break;
-            case 0x0F:
-                if (exec_priv(literal, rd, rs, &pc))
-                    halted = true;
-                break;
-            case 0x14: exec_addf(rd, rs, rt); break;
-            case 0x15: exec_subf(rd, rs, rt); break;
-            case 0x16: exec_mulf(rd, rs, rt); break;
-            case 0x17: exec_divf(rd, rs, rt); break;
-            case 0x10: next_pc = mov_rm(pc, rd, rs, rt, literal); break;
-            case 0x11: next_pc = mov_rr(pc, rd, rs, rt, literal); break;
-            case 0x12: next_pc = mov_rl(pc, rd, rs, rt, literal); break;
-            case 0x13: next_pc = mov_mr(pc, rd, rs, rt, literal); break;
-            default:
-                error("Unknown opcode");
+        switch (opcode)
+        {
+        case 0x18:
+            exec_add(rd, rs, rt);
+            break;
+        case 0x19:
+            exec_addi(rd, literal);
+            break;
+        case 0x1A:
+            exec_sub(rd, rs, rt);
+            break;
+        case 0x1B:
+            exec_subi(rd, literal);
+            break;
+        case 0x1C:
+            exec_mul(rd, rs, rt);
+            break;
+        case 0x1D:
+            exec_div(rd, rs, rt);
+            break;
+        case 0x00:
+            exec_and(rd, rs, rt);
+            break;
+        case 0x01:
+            exec_or(rd, rs, rt);
+            break;
+        case 0x02:
+            exec_xor(rd, rs, rt);
+            break;
+        case 0x03:
+            exec_not(rd, rs);
+            break;
+        case 0x04:
+            exec_shftr(rd, rs, rt);
+            break;
+        case 0x05:
+            exec_shftri(rd, literal);
+            break;
+        case 0x06:
+            exec_shftl(rd, rs, rt);
+            break;
+        case 0x07:
+            exec_shftli(rd, literal);
+            break;
+        case 0x08:
+            exec_br(rd, &next_pc);
+            break;
+        case 0x09:
+            exec_brr(rd, pc, &next_pc);
+            break;
+        case 0x0A:
+            exec_brrL(literal, pc, &next_pc);
+            break;
+        case 0x0B:
+            exec_brnz(rd, rs, pc, &next_pc);
+            break;
+        case 0x0C:
+            exec_call(rd, pc, &next_pc);
+            break;
+        case 0x0D:
+            exec_return(&next_pc);
+            break;
+        case 0x0E:
+            exec_brgt(rd, rs, rt, &next_pc);
+            break;
+        case 0x0F:
+            if (exec_priv(literal, rd, rs, &pc))
+                halted = true;
+            break;
+        case 0x14:
+            exec_addf(rd, rs, rt);
+            break;
+        case 0x15:
+            exec_subf(rd, rs, rt);
+            break;
+        case 0x16:
+            exec_mulf(rd, rs, rt);
+            break;
+        case 0x17:
+            exec_divf(rd, rs, rt);
+            break;
+        case 0x10:
+            next_pc = mov_rm(pc, rd, rs, rt, literal);
+            break;
+        case 0x11:
+            next_pc = mov_rr(pc, rd, rs, rt, literal);
+            break;
+        case 0x12:
+            next_pc = mov_rl(pc, rd, rs, rt, literal);
+            break;
+        case 0x13:
+            next_pc = mov_mr(pc, rd, rs, rt, literal);
+            break;
+        default:
+            error("Unknown opcode");
         }
         if (next_pc < start)
+        {
             error("PC underflow");
+        }
         pc = next_pc;
     }
 }
 
-
-int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        fprintf(stderr, "Usage: %s <binary_file>\n", argv[0]);
+int main(int argc, char *argv[])
+{
+    if (argc < 2)
+    {
+        fprintf(stderr, "Invalid tinker filepath\n");
         return 1;
     }
     FILE *file = fopen(argv[1], "rb");
-    if (!file) {
-        fprintf(stderr, "Invalid tinker binary filepath\n");
+    if (!file)
+    {
+        fprintf(stderr, "Invalid tinker filepath\n");
         return 1;
     }
+    memset(memory, 0, MEM);
+    memset(r, 0, sizeof(r));
+    r[31] = MEM;
 
-    // Read header (40 bytes: 5 64-bit values).
+     // Read header (40 bytes: 5 64-bit values).
     TinkerFileHeader header;
     if (fread(&header, sizeof(header), 1, file) != 1) {
         fprintf(stderr, "Error reading header\n");
@@ -431,12 +512,9 @@ int main(int argc, char *argv[]) {
             return 1;
         }
     }
-
     fclose(file);
-
-    // Set simulation PC to the start of the code segment.
-    // Now run the simulation starting at header.code_seg_begin.
-    secondPass_simulation(header.code_seg_begin);
-
+    
+    secondPass(header.code_seg_begin);
     return 0;
+
 }
