@@ -8,16 +8,9 @@
 #include <string.h>
 #include "tinker_file_header.h"
 
-
 #define MEM (512 * 1024)
 #define NUM_REGISTERS 32
-
-// New constants for segment locations.
-#define CODE_START 0x2000
-#define DATA_START 0x10000
-
-// Although START_ADDRESS was used before, we no longer use it for execution.
-//#define START_ADDRESS 0x1000  // (no longer used)
+#define START_ADDRESS 0x1000
 
 // Global simulated memory and registers.
 uint8_t memory[MEM];
@@ -43,7 +36,7 @@ void mem_write(uint64_t address, uint64_t value)
     }
 }
 
-uint64_t read_mem(uint64_t address)
+uint64_t read(uint64_t address)
 {
     if (address + 7 >= MEM)
     {
@@ -82,7 +75,8 @@ void exec_div(uint8_t rd, uint8_t rs, uint8_t rt)
 {
     if (r[rt] == 0)
     {
-        error("Division by zero");
+        fprintf(stderr, "Simulation error: Division by zero\n");
+        exit(1);
     }
     r[rd] = r[rs] / r[rt];
 }
@@ -122,21 +116,22 @@ void exec_shftli(uint8_t rd, uint64_t L)
 }
 
 // Control Instructions
-// Note: Branch targets must now be at or above CODE_START.
 void exec_br(uint8_t rd, uint64_t *new_pc)
 {
-    if (r[rd] < CODE_START || r[rd] >= MEM)
+    if (r[rd] >= MEM)
     {
-        error("Branch target out of bounds");
+        fprintf(stderr, "Simulation error: Branch target out of bounds\n");
+        exit(1);
     }
     *new_pc = r[rd];
 }
 void exec_brr(uint8_t rd, uint64_t current_pc, uint64_t *new_pc)
 {
     uint64_t target = current_pc + r[rd];
-    if (target < CODE_START || target >= MEM)
+    if (target >= MEM || target < START_ADDRESS)
     {
-        error("Branch target out of bounds");
+        fprintf(stderr, "Simulation error: Branch target out of bounds\n");
+        exit(1);
     }
     *new_pc = target;
 }
@@ -148,9 +143,10 @@ void exec_brrL(uint64_t L, uint64_t current_pc, uint64_t *new_pc)
         offset |= 0xFFFFF000;
     }
     uint64_t target = current_pc + offset;
-    if (target < CODE_START || target >= MEM)
+    if (target >= MEM || target < START_ADDRESS)
     {
-        error("Branch target out of bounds");
+        fprintf(stderr, "Simulation error: Branch target out of bounds\n");
+        exit(1);
     }
     *new_pc = target;
 }
@@ -158,9 +154,10 @@ void exec_brnz(uint8_t rd, uint8_t rs, uint64_t current_pc, uint64_t *new_pc)
 {
     if (r[rs] != 0)
     {
-        if (r[rd] < CODE_START || r[rd] >= MEM)
+        if (r[rd] >= MEM || r[rd] < START_ADDRESS)
         {
-            error("Branch target out of bounds");
+            fprintf(stderr, "Simulation error: Branch target out of bounds\n");
+            exit(1);
         }
         *new_pc = r[rd];
     }
@@ -170,34 +167,41 @@ void exec_call(uint8_t rd, uint64_t current_pc, uint64_t *new_pc)
 {
     if (r[31] < 8)
     {
-        error("Stack underflow");
+        fprintf(stderr, "Simulation error: Stack underflow\n");
+        exit(1);
     }
     if (r[31] + 8 > MEM)
     {
-        error("Stack pointer out of bounds");
+        fprintf(stderr, "Simulation error: Stack pointer out of bounds\n");
+        exit(1);
     }
     *((uint64_t *)(memory + r[31]-8)) = current_pc + 4;
     *new_pc = r[rd];
 }
+
+
 void exec_return(uint64_t *new_pc)
 {
     if (r[31] > MEM - 8)
     {
-        error("Stack underflow");
+        fprintf(stderr, "Simulation error: Stack underflow\n");
+        exit(1);
     }
     *new_pc = *((uint64_t *)(memory + r[31]-8));
 }
+
 void exec_brgt(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *new_pc)
 {
     if ((int64_t)r[rs] > (int64_t)r[rt])
     {
-        if (r[rd] < CODE_START || r[rd] >= MEM)
+        if (r[rd] >= MEM || r[rd] < START_ADDRESS)
         {
-            error("Branch target out of bounds");
+            fprintf(stderr, "Simulation error: Branch target out of bounds\n");
+            exit(1);
         }
         *new_pc = r[rd];
     }
-    // Otherwise, new_pc remains unchanged.
+    // Otherwise, new_pc remains unchanged (caller will add 4)
 }
 
 // Privileged Instruction
@@ -216,14 +220,15 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *pc)
         {
             if (scanf("%" SCNu64, &r[rd]) != 1)
             {
-                error("Failed to read input");
+                fprintf(stderr, "Simulation error: Failed to read input\n");
+                exit(1);
             }
         }
         break;
     case 0x4:
         if (r[rd] == 1)
         {
-            printf("%" PRIu64 "\n", r[rs]);
+            printf("%lu\n", r[rs]); // add newline
         }
         break;
     default:
@@ -232,32 +237,39 @@ bool exec_priv(uint64_t L, uint8_t rd, uint8_t rs, uint64_t *pc)
     return false;
 }
 
-// Data Movement Instructions (mov_rm, mov_rr, mov_rl, mov_mr) remain unchanged.
+// Data Movement Instructions
+// mov_rm: Memory-to-register
 uint64_t mov_rm(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal)
 {
     int64_t offset = (literal & 0x800) ? ((int64_t)literal | 0xFFFFFFFFFFFFF000ULL) : literal;
     uint64_t address = r[rs] + offset;
-    r[rd] = read_mem(address);
+
+    r[rd] = read(address);
     return pc + 4;
 }
+// mov_rr: Register-to-register
 uint64_t mov_rr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal)
 {
     r[rd] = r[rs];
     return pc + 4;
 }
+// mov_rl: Register literal modification
 uint64_t mov_rl(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal)
 {
     uint64_t mask = 0xFFF;
     r[rd] = (r[rd] & ~mask) | (literal & mask);
     return pc + 4;
 }
+// mov_mr: Register-to-memory
 uint64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t literal)
 {
-    uint16_t lit12 = literal & 0xFFF;
-    int64_t offset = (lit12 & 0x800) ? ((int64_t)lit12 | 0xFFFFFFFFFFFFF000ULL) : (int64_t)lit12;
+    uint16_t lit12 = literal & 0xFFF; // no extra masking here
+    int64_t offset = (lit12 & 0x800)
+                         ? ((int64_t)lit12 | 0xFFFFFFFFFFFFF000ULL)
+                         : (int64_t)lit12;
     uint64_t address = r[rd] + offset;
-    if (address % 8 != 0)
-    {
+
+   if (address % 8 != 0) {
         error("Memory must be 8-byte aligned.");
     }
     mem_write(address, r[rs]);
@@ -302,63 +314,30 @@ void exec_divf(uint8_t rd, uint8_t rs, uint8_t rt)
     memcpy(&r[rd], &result, sizeof(double));
 }
 
-// ---------------- NEW: load_program() ----------------
-// Reads a binary file produced by your new assembler. The first 20 bytes are the header.
-// The code segment is loaded at CODE_START and the data segment at DATA_START.
-void load_program(const char *filename)
+void firstRead(size_t size, size_t count, FILE *file)
 {
-    FILE *file = fopen(filename, "rb");
-    if (!file)
+    size_t bytesRead;
+    uint64_t programCounter = START_ADDRESS;
+    while ((bytesRead = fread((char *)memory + programCounter, size, count, file)) > 0)
     {
-        error("Cannot open program file");
+        programCounter += 4;
+        if (programCounter + 4 > MEM)
+        {
+            error("Program too large for memory");
+        }
     }
-    TinkerFileHeader header;
-    if (fread(&header, sizeof(header), 1, file) != 1)
-    {
-        error("Failed to read header");
-    }
-    // For debugging, print header (in decimal)
-    printf("Header:\n");
-    printf("%u\n", header.file_type);
-    printf("%u\n", header.code_seg_begin);
-    printf("%u\n", header.code_seg_size);
-    printf("%u\n", header.data_seg_begin);
-    printf("%u\n", header.data_seg_size);
-
-    // Load code segment
-    if (fread(memory + header.code_seg_begin, 1, header.code_seg_size, file) != header.code_seg_size)
-    {
-        error("Failed to read code segment");
-    }
-    // Load data segment
-    if (fread(memory + header.data_seg_begin, 1, header.data_seg_size, file) != header.data_seg_size)
-    {
-        error("Failed to read data segment");
-    }
-    fclose(file);
 }
-
-// ---------------- MODIFIED secondPass() ----------------
-// Execution now starts at CODE_START.
-void secondPass(void)
-{
-    uint64_t pc = CODE_START;
-    uint64_t start = CODE_START;
+void secondPass_simulation(uint64_t start_pc) {
+    uint64_t pc = start_pc;
+    uint64_t start = start_pc;
     bool halted = false;
-    while (!halted)
-    {
+    while (!halted) {
         if (pc + 4 > MEM)
-        {
             error("PC out of bounds");
-        }
         if (pc % 4 != 0)
-        {
             error("Unaligned PC");
-        }
         if (pc < start)
-        {
             error("PC underflow");
-        }
         uint32_t instruction = *((uint32_t *)(memory + pc));
         uint8_t opcode = (instruction >> 27) & 0x1F;
         uint8_t rd = (instruction >> 22) & 0x1F;
@@ -366,130 +345,111 @@ void secondPass(void)
         uint8_t rt = (instruction >> 12) & 0x1F;
         uint16_t literal = instruction & 0xFFF;
         uint64_t next_pc = pc + 4;
-        switch (opcode)
-        {
-        case 0x18:
-            exec_add(rd, rs, rt);
-            break;
-        case 0x19:
-            exec_addi(rd, literal);
-            break;
-        case 0x1A:
-            exec_sub(rd, rs, rt);
-            break;
-        case 0x1B:
-            exec_subi(rd, literal);
-            break;
-        case 0x1C:
-            exec_mul(rd, rs, rt);
-            break;
-        case 0x1D:
-            exec_div(rd, rs, rt);
-            break;
-        case 0x00:
-            exec_and(rd, rs, rt);
-            break;
-        case 0x01:
-            exec_or(rd, rs, rt);
-            break;
-        case 0x02:
-            exec_xor(rd, rs, rt);
-            break;
-        case 0x03:
-            exec_not(rd, rs);
-            break;
-        case 0x04:
-            exec_shftr(rd, rs, rt);
-            break;
-        case 0x05:
-            exec_shftri(rd, literal);
-            break;
-        case 0x06:
-            exec_shftl(rd, rs, rt);
-            break;
-        case 0x07:
-            exec_shftli(rd, literal);
-            break;
-        case 0x08:
-            exec_br(rd, &next_pc);
-            break;
-        case 0x09:
-            exec_brr(rd, pc, &next_pc);
-            break;
-        case 0x0A:
-            exec_brrL(literal, pc, &next_pc);
-            break;
-        case 0x0B:
-            exec_brnz(rd, rs, pc, &next_pc);
-            break;
-        case 0x0C:
-            exec_call(rd, pc, &next_pc);
-            break;
-        case 0x0D:
-            exec_return(&next_pc);
-            break;
-        case 0x0E:
-            exec_brgt(rd, rs, rt, &next_pc);
-            break;
-        case 0x0F:
-            if (exec_priv(literal, rd, rs, &pc))
-                halted = true;
-            break;
-        case 0x14:
-            exec_addf(rd, rs, rt);
-            break;
-        case 0x15:
-            exec_subf(rd, rs, rt);
-            break;
-        case 0x16:
-            exec_mulf(rd, rs, rt);
-            break;
-        case 0x17:
-            exec_divf(rd, rs, rt);
-            break;
-        case 0x10:
-            next_pc = mov_rm(pc, rd, rs, rt, literal);
-            break;
-        case 0x11:
-            next_pc = mov_rr(pc, rd, rs, rt, literal);
-            break;
-        case 0x12:
-            next_pc = mov_rl(pc, rd, rs, rt, literal);
-            break;
-        case 0x13:
-            next_pc = mov_mr(pc, rd, rs, rt, literal);
-            break;
-        default:
-            error("Unknown opcode");
+        switch (opcode) {
+            case 0x18: exec_add(rd, rs, rt); break;
+            case 0x19: exec_addi(rd, literal); break;
+            case 0x1A: exec_sub(rd, rs, rt); break;
+            case 0x1B: exec_subi(rd, literal); break;
+            case 0x1C: exec_mul(rd, rs, rt); break;
+            case 0x1D: exec_div(rd, rs, rt); break;
+            case 0x00: exec_and(rd, rs, rt); break;
+            case 0x01: exec_or(rd, rs, rt); break;
+            case 0x02: exec_xor(rd, rs, rt); break;
+            case 0x03: exec_not(rd, rs); break;
+            case 0x04: exec_shftr(rd, rs, rt); break;
+            case 0x05: exec_shftri(rd, literal); break;
+            case 0x06: exec_shftl(rd, rs, rt); break;
+            case 0x07: exec_shftli(rd, literal); break;
+            case 0x08: exec_br(rd, &next_pc); break;
+            case 0x09: exec_brr(rd, pc, &next_pc); break;
+            case 0x0A: exec_brrL(literal, pc, &next_pc); break;
+            case 0x0B: exec_brnz(rd, rs, pc, &next_pc); break;
+            case 0x0C: exec_call(rd, pc, &next_pc); break;
+            case 0x0D: exec_return(&next_pc); break;
+            case 0x0E: exec_brgt(rd, rs, rt, &next_pc); break;
+            case 0x0F:
+                if (exec_priv(literal, rd, rs, &pc))
+                    halted = true;
+                break;
+            case 0x14: exec_addf(rd, rs, rt); break;
+            case 0x15: exec_subf(rd, rs, rt); break;
+            case 0x16: exec_mulf(rd, rs, rt); break;
+            case 0x17: exec_divf(rd, rs, rt); break;
+            case 0x10: next_pc = mov_rm(pc, rd, rs, rt, literal); break;
+            case 0x11: next_pc = mov_rr(pc, rd, rs, rt, literal); break;
+            case 0x12: next_pc = mov_rl(pc, rd, rs, rt, literal); break;
+            case 0x13: next_pc = mov_mr(pc, rd, rs, rt, literal); break;
+            default:
+                error("Unknown opcode");
         }
         if (next_pc < start)
-        {
             error("PC underflow");
-        }
         pc = next_pc;
     }
 }
 
-// ---------------- Modified main() ----------------
-int main(int argc, char *argv[])
-{
-    if (argc < 2)
-    {
-        fprintf(stderr, "Usage: %s <program_file>\n", argv[0]);
+
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <binary_file>\n", argv[0]);
+        return 1;
+    }
+    FILE *file = fopen(argv[1], "rb");
+    if (!file) {
+        fprintf(stderr, "Invalid tinker binary filepath\n");
         return 1;
     }
 
-    // Initialize memory and registers.
-    memset(memory, 0, MEM);
-    memset(r, 0, sizeof(r));
-    // Set stack pointer (r[31]) to MEM.
-    r[31] = MEM;
+    // Read header (40 bytes: 5 64-bit values).
+    TinkerFileHeader header;
+    if (fread(&header, sizeof(header), 1, file) != 1) {
+        fprintf(stderr, "Error reading header\n");
+        fclose(file);
+        return 1;
+    }
+    // Debug print header.
+    printf("Header:\n");
+    printf("  file_type: %" PRIu64 "\n", header.file_type);
+    printf("  code_seg_begin: 0x%" PRIX64 "\n", header.code_seg_begin);
+    printf("  code_seg_size: %" PRIu64 "\n", header.code_seg_size);
+    printf("  data_seg_begin: 0x%" PRIX64 "\n", header.data_seg_begin);
+    printf("  data_seg_size: %" PRIu64 "\n", header.data_seg_size);
 
-    // Instead of firstRead(), use load_program() to load a file with header, code, and data.
-    load_program(argv[1]);
+    // Read code segment.
+    if (header.code_seg_size > 0) {
+        if (fseek(file, sizeof(header), SEEK_SET) != 0) {
+            perror("fseek code segment");
+            fclose(file);
+            return 1;
+        }
+        size_t code_read = fread(memory + header.code_seg_begin, 1, header.code_seg_size, file);
+        if (code_read != header.code_seg_size) {
+            fprintf(stderr, "Failed to read complete code segment\n");
+            fclose(file);
+            return 1;
+        }
+    }
 
-    // Begin simulation starting from CODE_START.
-    secondPass();
+    // Read data segment.
+    if (header.data_seg_size > 0) {
+        if (fseek(file, sizeof(header) + header.code_seg_size, SEEK_SET) != 0) {
+            perror("fseek data segment");
+            fclose(file);
+            return 1;
+        }
+        size_t data_read = fread(memory + header.data_seg_begin, 1, header.data_seg_size, file);
+        if (data_read != header.data_seg_size) {
+            fprintf(stderr, "Failed to read complete data segment\n");
+            fclose(file);
+            return 1;
+        }
+    }
+
+    fclose(file);
+
+    // Set simulation PC to the start of the code segment.
+    // Now run the simulation starting at header.code_seg_begin.
+    secondPass_simulation(header.code_seg_begin);
 
     return 0;
 }
