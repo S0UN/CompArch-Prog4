@@ -407,14 +407,7 @@ int main(int argc, char *argv[]) {
         fclose(file);
         return 1;
     }
-    // Debug print header.
-    printf("Header:\n");
-    printf("  file_type: %" PRIu64 "\n", header.file_type);
-    printf("  code_seg_begin: 0x%" PRIX64 "\n", header.code_seg_begin);
-    printf("  code_seg_size: %" PRIu64 "\n", header.code_seg_size);
-    printf("  data_seg_begin: 0x%" PRIX64 "\n", header.data_seg_begin);
-    printf("  data_seg_size: %" PRIu64 "\n", header.data_seg_size);
-
+  
     // Read code segment.
     if (header.code_seg_size > 0) {
         if (fseek(file, sizeof(header), SEEK_SET) != 0) {

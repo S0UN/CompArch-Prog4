@@ -1,21 +1,14 @@
 .code
-	add r1, r2, r3
-	add r1, r2, r3
-	add r1, r2, r3
-	ld r5, :N0
-.code
-:L1
-	clr r1
-	push r5
-	pop r7
-	add r1, r2, r3
-.data
-:N0
-	8
-	10
-	1345134513
-.code
-	add r1, r2, r3
-	add r1, r2, r3
-	ld r10, :L1
+; load r0 with a value
+	xor r0, r0, r0
+	addi r0, 752
+; load r1 with a value
+	xor r1, r1, r1
+	addi r1, 153
+; do op
+	add r5, r0, r1
+; out
+	xor r6, r6, r6
+	addi r6, 1
+	out r6, r5
 	halt
