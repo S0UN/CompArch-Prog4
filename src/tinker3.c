@@ -26,10 +26,7 @@ void error(const char *message)
 // Global write function: writes a 64-bit value to memory in little-endian order.
 void mem_write(uint64_t address, uint64_t value)
 {
-    if (address + 7 >= MEM)
-    {
-        error("Memory access out of bounds.");
-    }
+
     for (int i = 0; i < 8; i++)
     {
         memory[address + i] = (value >> (8 * i)) & 0xFF;
@@ -38,10 +35,7 @@ void mem_write(uint64_t address, uint64_t value)
 
 uint64_t read(uint64_t address)
 {
-    if (address + 7 >= MEM)
-    {
-        error("Memory access out of bounds.");
-    }
+
     uint64_t value = 0;
     for (int i = 0; i < 8; i++)
     {
