@@ -4,16 +4,17 @@
 	addi r3, 1
 	xor r0, r0, r0
 	addi r1, 1
-	out r3, r0
-	subi r2, 1
-	ld r10, :L_LOOP
+	subi r2, 2
+	ld r10, :LOOP
 	brnz r10, r2
+	out r3, r1
 	halt
-:L_LOOP
+
+:LOOP
 	add r4, r0, r1
-	out r3, r4
 	mov r0, r1
 	mov r1, r4
 	subi r2, 1
 	brnz r10, r2
+	out r3, r1
 	halt
