@@ -11,66 +11,79 @@
 	ld r28, :NOT_FOUND_LABEL
 	ld r29, :COMPARE_EVAL
 	in r1, r0
-	brgt r22, r1, r0
+	ld r16, :INIT_START
+	brgt r16, r1, r0
 	halt
 :INIT_START
-	ld r2, 512
+	ld r2, 86016
 	mov r3, r1
-	br :ITEM_LOAD_LOOP
+	ld r16, :ITEM_LOAD_LOOP
+	br r16
 :ITEM_LOAD_LOOP
 	subi r3, 1
-	brgt r26, r0, r3
+	ld r16, :READ_KEY
+	brgt r16, r0, r3
 	in r4, r0
 	ld r5, 8
 	mul r6, r7, r5
 	addi r7, 1
 	add r8, r2, r6
 	mov (r8)(0), r4
-	br :ITEM_LOAD_LOOP
+	ld r16, :ITEM_LOAD_LOOP
+	br r16
 :READ_KEY
 	in r10, r0
 	mov r11, r0
 	mov r12, r1
 	subi r12, 1
-	br :BIN_SEARCH_LOOP
+	ld r16, :BIN_SEARCH_LOOP
+	br r16
 :BIN_SEARCH_LOOP
-	brgt r28, r11, r12
-	br :CALC_MIDPOINT
+	ld r16, :NOT_FOUND_LABEL
+	brgt r16, r11, r12
+	ld r16, :CALC_MIDPOINT
+	br r16
 :CALC_MIDPOINT
 	add r13, r11, r12
 	ld r14, 2
 	div r13, r13, r14
-	br :CALC_MIDPOINT_DONE
+	ld r16, :CALC_MIDPOINT_DONE
+	br r16
 :CALC_MIDPOINT_DONE
 	mul r15, r13, r5
 	add r15, r2, r15
-	br :LOAD_MID_VALUE
+	ld r16, :LOAD_MID_VALUE
+	br r16
 :LOAD_MID_VALUE
 	mov r16, (r15)(0)
-	br :COMPARE_VALUES
+	ld r16, :COMPARE_VALUES
+	br r16
 :COMPARE_VALUES
 	sub r17, r10, r16
-	brnz r29, r17
-	br :KEY_FOUND
+	ld r16, :COMPARE_EVAL
+	brnz r16, r17
+	ld r16, :KEY_FOUND
+	br r16
 :KEY_FOUND
 	ld r18, 431349919590
 	out r30, r18
 	halt
 :COMPARE_EVAL
 	shftri r17, 63
-	brnz r23, :UPDATE_SELECTION
-	br :UPDATE_SELECTION
-:UPDATE_SELECTION
-	brnz r23, :HIGH_UPDATE2
-	br :LOW_UPDATE2
+	ld r16, :HIGH_UPDATE2
+	brnz r16, r17
+	ld r16, :LOW_UPDATE2
+	br r16
 :LOW_UPDATE2
 	mov r11, r13
 	addi r11, 1
-	br :BIN_SEARCH_LOOP
+	ld r16, :BIN_SEARCH_LOOP
+	br r16
 :HIGH_UPDATE2
 	mov r12, r13
 	subi r12, 1
-	br :BIN_SEARCH_LOOP
+	ld r16, :BIN_SEARCH_LOOP
+	br r16
 :NOT_FOUND_LABEL
 	ld r18, 28258114110997510
 	out r30, r18
