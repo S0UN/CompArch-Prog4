@@ -1,76 +1,92 @@
 .code
-    in r2, r0
-    ld r10, :BASE
-    xor r11, r11, r11
-:READ
-    mov r12, r2
-    sub r12, r12, r11
-    ld r20, :RCONT
-    brnz r20, r12
-    ld r20, :RDONE
-    br r20
-:RCONT
-    in r6, r0
-    mov r13, r11
-    shftli r13, 3
-    mov r14, r10
-    add r14, r14, r13
-    mov (r14)(0), r6
-    addi r11, 1
-    ld r20, :READ
-    br r20
-:RDONE
-    xor r3, r3, r3
-    addi r3, 3
-:LOOP
-    in r4, r0
-    xor r5, r5, r5
-    mov r6, r2
-    subi r6, 1
-:BS
-    ld r20, :NF
-    brgt r20, r5, r6
-    mov r7, r5
-    add r7, r7, r6
-    shfttri r7, 1
-    mov r8, r7
-    shftli r8, 3
-    add r8, r10, r8
-    mov r9, (r8)(0)
-    xor r12, r9, r4
-    ld r20, :NE
-    brnz r20, r12
-    ld r15, :FOUND
-    out r3, r15
-    ld r20, :LOOP
-    br r20
-:NE
-    sub r13, r4, r9
-    ld r20, :UL
-    brgt r20, r13, r0
-    ld r20, :UH
-    br r20
-:UL
-    mov r5, r7
-    addi r5, 1
-    ld r20, :BS
-    br r20
-:UH
-    mov r6, r7
-    subi r6, 1
-    ld r20, :BS
-    br r20
-:NF
-    ld r15, :NFND
-    out r3, r15
-    ld r20, :LOOP
-    br r20
-    halt
+	clr r0
+	clr r7
+	ld r30, 3
+	ld r22, :INIT_START
+	ld r23, :HIGH_UPDATE2
+	ld r24, :LOW_UPDATE2
+	ld r25, :ITEM_LOAD_LOOP
+	ld r26, :READ_KEY
+	ld r27, :BIN_SEARCH_LOOP
+	ld r28, :NOT_FOUND_LABEL
+	ld r29, :COMPARE_EVAL
+	in r1, r0
+	brgt r22, r1, r0
+	halt
 
-.data
-:BASE
-    0x0000000000004000
-:FOUND
-    0x000000646E756F66
-:NFND
-    0x6E6F69746F666E00
+:INIT_START
+	ld r2, 512
+	mov r3, r1
+	br :ITEM_LOAD_LOOP
+
+:ITEM_LOAD_LOOP
+	subi r3, 1
+	brgt r26, r0, r3
+	in r4, r0
+	ld r5, 8
+	mul r6, r7, r5
+	addi r7, 1
+	add r8, r2, r6
+	mov (r8)(0), r4
+	br :ITEM_LOAD_LOOP
+
+:READ_KEY
+	in r10, r0
+	mov r11, r0
+	mov r12, r1
+	subi r12, 1
+	br :BIN_SEARCH_LOOP
+
+:BIN_SEARCH_LOOP
+	brgt r28, r11, r12
+	br :CALC_MIDPOINT
+
+:CALC_MIDPOINT
+	add r13, r11, r12
+	ld r14, 2
+	div r13, r13, r14
+	br :CALC_MIDPOINT_DONE
+
+:CALC_MIDPOINT_DONE
+	mul r15, r13, r5
+	add r15, r2, r15
+	br :LOAD_MID_VALUE
+
+:LOAD_MID_VALUE
+	mov r16, (r15)(0)
+	br :COMPARE_VALUES
+
+:COMPARE_VALUES
+	sub r17, r10, r16
+	brnz r29, r17
+	br :KEY_FOUND
+
+:KEY_FOUND
+	ld r18, 431349919590
+	out r30, r18
+	halt
+
+:COMPARE_EVAL
+	shftri r17, 63
+	brnz r23, :UPDATE_SELECTION
+	br :UPDATE_SELECTION
+
+:UPDATE_SELECTION
+	; Extra label to break update flow
+	brnz r23, :HIGH_UPDATE2
+	br :LOW_UPDATE2
+
+:LOW_UPDATE2
+	mov r11, r13
+	addi r11, 1
+	br :BIN_SEARCH_LOOP
+
+:HIGH_UPDATE2
+	mov r12, r13
+	subi r12, 1
+	br :BIN_SEARCH_LOOP
+
+:NOT_FOUND_LABEL
+	ld r18, 28258114110997510
+	out r30, r18
+	halt

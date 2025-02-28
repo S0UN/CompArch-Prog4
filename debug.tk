@@ -1,153 +1,121 @@
-	in      r1, r0             ; Read matrix dimension (n) from input into r1
-	ld      r6, 0x2000         ; Load base address for Matrix A into r6
-	ld      r7, 0x3000         ; Load base address for Matrix B into r7
-	ld      r8, 0x4000         ; Load base address for Matrix C into r8
-	clr     r2                 ; Clear r2: initialize row index for Matrix A
+;Regs:
+;
+;INPUT REGISTERS
+;
+;r0: 0 register
+;r1: num items
+;r2: array address
+;r3: item counter
+;r4: item
+;r5: 8 (byte)
+;r6: offset
+;r7: count
+;r8: Item Address
+;
+;SEARCH REGISTERS
+;
+;r10: item to search
+;r11: low
+;r12: high
+;r13: middle
+;r14: 2 (divisor)
+;r15: Midpoint address
+;r16: Midpoint value
+;r17: Difference in value
+;r18: Output
+;
+;LABEL REGISTERS
+;
+;r22: Start
+;r23: NewHigh
+;r24: NewLow
+;r25: Items
+;r26: FinishRead
+;r27: BinSearch
+;r28: NotFound
+;r29: Proceed
+;
+;MISC REGISTERS
+;r30: output port (3)
 
-:A_loop
-	ld      r16, :A_body       ; Load address of :A_body into r16
-	brgt    r16, r1, r2        ; If n > current row (r2), branch to :A_body
-	ld      r16, :B_read_start ; Otherwise, all rows read; jump to reading Matrix B
-	br      r16
+.code
+;make sure number of items is greater than 0 and also load necessary registers
+    clr r0
+    clr r7
+    ld r30, 3
+    ld r22, :Start
+    ld r23, :NewHigh
+    ld r24, :NewLow
+    ld r25, :Items
+    ld r26, :FinishRead
+    ld r27, :BinSearch
+    ld r28, :NotFound
+    ld r29, :Proceed
+    in r1, r0
+    brgt r22, r1, r0
+    halt
 
-:A_body
-	clr     r3                 ; Clear r3: initialize column index for current row in A
+:Start
+;Load array address
+    ld r2, 86016
+    mov r3, r1
 
-:A_inner
-	ld      r16, :A_inner_body ; Load address of :A_inner_body into r16
-	brgt    r16, r1, r3        ; If n > current column (r3), branch to :A_inner_body
-	addi    r2, 1              ; Else, finished row: increment row index r2
-	ld      r16, :A_loop       ; Jump back to :A_loop to process next row
-	br      r16
+:Items
+;Load Items
+    subi r3, 1
+    brgt r26, r0, r3
+    in r4, r0
+    ld r5, 8
+    mul r6, r7, r5
+    addi r7, 1
+    add r8, r2, r6
+    mov (r8)(0), r4
+    br r25
 
-:A_inner_body
-	mul     r9, r2, r1         ; Compute offset = row_index * n
-	add     r9, r9, r3         ; Add column index: offset = (row_index * n + col_index)
-	shftli  r9, 3              ; Multiply offset by 8 (<< 3) for 8-byte alignment
-	add     r9, r6, r9         ; Add base address for A to get effective address of A[i][j]
-	in      r10, r0            ; Read element value from input into r10
-	mov     (r9)(0), r10       ; Store value at computed memory address for A[i][j]
-	addi    r3, 1              ; Increment column index for Matrix A
-	ld      r16, :A_inner      ; Branch back to inner loop for next element in row
-	br      r16
+:FinishRead
+;Read search item
+    in r10, r0
+    mov r11, r0         
+    mov r12, r1
+    subi r12, 1
 
-:B_read_start
-	clr     r2                 ; Clear r2: initialize row index for Matrix B
+:BinSearch
+    brgt r28, r11, r12
+    add r13, r11, r12
+    ld r14, 2
+    div r13, r13, r14
+    mul r15, r13, r5
+    add r15, r2, r15
+    mov r16, (r15)(0)
+;Compare search key with midpoint value
+    sub r17, r10, r16
+    brnz r29, r17
+;Key found
+    ld r18, 0x646E756F66
+    out r30, r18
+    halt
 
-:B_loop
-	ld      r16, :B_body       ; Load address of :B_body into r16
-	brgt    r16, r1, r2        ; If n > current row (r2), branch to :B_body
-	ld      r16, :Multiply_start ; Else, finished reading B; jump to multiplication phase
-	br      r16
+:Proceed
+;Shift r17 right by 63 bits to extract the sign bit.
+    shftri r17, 63
+;If the sign bit is nonzero then r17 is negative (i.e. search key < array[mid])
+    brnz r23, r17
+;Otherwise, search key > array[mid]
 
-:B_body
-	clr     r3                 ; Clear r3: initialize column index for current row in B
+:NewLow
+;Set low = mid + 1
+    mov r11, r13
+    addi r11, 1 
+    br r27
 
-:B_inner
-	ld      r16, :B_inner_body ; Load address of :B_inner_body into r16
-	brgt    r16, r1, r3        ; If n > current column (r3), branch to :B_inner_body
-	addi    r2, 1              ; Else, finished row: increment row index for B
-	ld      r16, :B_loop       ; Branch back to outer loop for Matrix B
-	br      r16
+:NewHigh
+;Set high = mid - 1
+    mov r12, r13
+    subi r12, 1
+    br r27
 
-:B_inner_body
-	mul     r9, r2, r1         ; Compute offset = row_index * n for B
-	add     r9, r9, r3         ; Add column index: offset = (row_index * n + col_index)
-	shftli  r9, 3              ; Multiply offset by 8 for 8-byte alignment
-	add     r9, r7, r9         ; Add base address for B to get effective address of B[i][j]
-	in      r10, r0            ; Read element value from input into r10
-	mov     (r9)(0), r10       ; Store value at computed memory address for B[i][j]
-	addi    r3, 1              ; Increment column index for Matrix B
-	ld      r16, :B_inner      ; Branch back to inner loop for next element in row
-	br      r16
-
-:Multiply_start
-	clr     r2                 ; Clear r2: initialize row index for matrix multiplication (result matrix C)
-
-:M_loop
-	ld      r16, :M_body       ; Load address of :M_body into r16
-	brgt    r16, r1, r2        ; If n > current row (r2), branch to :M_body
-	ld      r16, :Output_start ; Else, finished multiplication; jump to output phase
-	br      r16
-
-:M_body
-	mov     r15, r2            ; Save current row index (r2) into r15 for use in dot product
-	clr     r3                 ; Clear r3: initialize column index for result matrix C
-
-:M_inner
-	ld      r16, :M_inner_body ; Load address of :M_inner_body into r16
-	brgt    r16, r1, r3        ; If n > current column (r3), branch to :M_inner_body
-	addi    r2, 1              ; Else, finished current row; increment row index r2
-	ld      r16, :M_loop       ; Branch back to outer multiplication loop
-	br      r16
-
-:M_inner_body
-	clr     r5                 ; Clear accumulator r5 for dot product result for C[i][j]
-	clr     r4                 ; Clear inner loop counter r4 (k index)
-
-:K_loop
-	ld      r16, :K_body       ; Load address of :K_body into r16
-	brgt    r16, r1, r4        ; If n > current k (r4), branch to :K_body
-	ld      r16, :Store_C      ; Else, finished inner loop; branch to store the result in C
-	br      r16
-
-:K_body
-	mul     r9, r15, r1        ; Compute offset for A[r15][k] = r15 * n
-	add     r9, r9, r4         ; Add k index: offset = (r15 * n + k)
-	shftli  r9, 3              ; Multiply offset by 8 for alignment
-	add     r9, r6, r9         ; Add base address for A to get effective address of A[r15][k]
-	mov     r11, (r9)(0)       ; Load value of A[r15][k] into r11
-	mul     r12, r4, r1        ; Compute offset for B[k][j] = k * n
-	add     r12, r12, r3       ; Add current column index (j): offset = (k * n + j)
-	shftli  r12, 3             ; Multiply offset by 8 for alignment
-	add     r12, r7, r12       ; Add base address for B to get effective address of B[k][j]
-	mov     r13, (r12)(0)      ; Load value of B[k][j] into r13
-	mulf    r14, r11, r13      ; Multiply A[r15][k] * B[k][j] (floating-point multiplication)
-	addf    r5, r5, r14        ; Accumulate product into r5
-	addi    r4, 1              ; Increment k (inner loop counter)
-	ld      r16, :K_loop       ; Branch back to :K_loop for next k value
-	br      r16
-
-:Store_C
-	mul     r9, r15, r1        ; Compute offset for C[r15][j] = r15 * n
-	add     r9, r9, r3         ; Add current column index (j)
-	shftli  r9, 3              ; Multiply offset by 8 for alignment
-	add     r9, r8, r9         ; Add base address for C to get effective address of C[r15][j]
-	mov     (r9)(0), r5        ; Store the computed dot product from r5 into C[r15][j]
-	addi    r3, 1              ; Increment column index for result matrix C
-	ld      r16, :M_inner      ; Branch back to :M_inner to process next element in the row
-	br      r16
-
-:Output_start
-	clr     r2                 ; Clear r2: initialize row index for output phase
-
-:O_outer
-	ld      r16, :O_body       ; Load address of :O_body into r16
-	brgt    r16, r1, r2        ; If n > current row (r2), branch to :O_body to output that row
-	ld      r16, :Halt_program ; Else, finished output; branch to halt
-	br      r16
-
-:O_body
-	clr     r3                 ; Clear r3: initialize column index for output in current row
-
-:O_inner
-	ld      r16, :O_inner_body ; Load address of :O_inner_body into r16
-	brgt    r16, r1, r3        ; If n > current column (r3), branch to :O_inner_body for outputting element
-	addi    r2, 1              ; Else, finished current row; increment row index (r2)
-	ld      r16, :O_outer       ; Branch back to :O_outer for next row
-	br      r16
-
-:O_inner_body
-	mul     r9, r2, r1         ; Compute offset for C[r2][j] = r2 * n
-	add     r9, r9, r3         ; Add column index (j)
-	shftli  r9, 3              ; Multiply offset by 8 for alignment
-	add     r9, r8, r9         ; Add base address for C to get effective address of C[r2][j]
-	mov     r10, (r9)(0)       ; Load element C[r2][j] into r10
-	ld      r11, 1             ; Load constant 1 into r11 (output port number)
-	out     r11, r10           ; Output the value of C[r2][j] to the console
-	addi    r3, 1              ; Increment column index for output
-	ld      r16, :O_inner      ; Branch back to :O_inner for next element in the row
-	br      r16
-
-:Halt_program
-	priv    r0, r0, r0, 0x0     ; Halt the processor (stop simulation)
+:NotFound
+;Key not found: output "not found" to port 3.
+    ld r18, 0x64756F66746F6E
+    out r30, r18
+    halt
