@@ -1,7 +1,7 @@
 .code
 	clr r0
 	clr r7
-	ld r30, 3
+	ld r30, 1
 	ld r22, :INIT_START
 	ld r23, :HIGH_UPDATE2
 	ld r24, :LOW_UPDATE2
