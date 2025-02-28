@@ -1,8 +1,6 @@
 .code
 :START
-	ld r2, 0
-	in r20, rd
-	clr r2
+	ld r20, 0
 	in r1, r20
 	mov r10, r1
 	mov r12, r31
@@ -11,7 +9,7 @@
 :READ_LOOP
 	ld r8, :GET_ITEM
 	brnz r8, r1
-	ld r4, :LINEAR_SEARCH
+	ld r4, :NOTFOUND
 	br r4
 :GET_ITEM
 	in r4, r20
@@ -20,56 +18,23 @@
 	sub r1, r1, r21
 	ld r4, :READ_LOOP
 	br r4
-:LINEAR_SEARCH
-	in r6, r20
-	mov r3, r12
-	mov r1, r10
-:SEARCH_LOOP
-	brnz r1, :COMPARE
-	ld r4, :NOTFOUND
-	br r4
-:COMPARE
-	mov r2, (r3)(0)
-	sub r8, r2, r6
-	brnz r8, :NEXT
-	ld r4, :FOUND
-	br r4
-:NEXT
-	ld r21, 1
-	sub r1, r1, r21
-	addi r3, r3, 8
-	br :SEARCH_LOOP
-:FOUND
-	ld r4, 3
-	mov r0, 102
-	out r4, r0
-	mov r0, 111
-	out r4, r0
-	mov r0, 117
-	out r4, r0
-	mov r0, 110
-	out r4, r0
-	mov r0, 100
-	out r4, r0
-	halt
 :NOTFOUND
-	ld r4, 3
 	mov r0, 110
-	out r4, r0
+	out r7, r0
 	mov r0, 111
-	out r4, r0
+	out r7, r0
 	mov r0, 116
-	out r4, r0
+	out r7, r0
 	mov r0, 32
-	out r4, r0
+	out r7, r0
 	mov r0, 102
-	out r4, r0
+	out r7, r0
 	mov r0, 111
-	out r4, r0
+	out r7, r0
 	mov r0, 117
-	out r4, r0
+	out r7, r0
 	mov r0, 110
-	out r4, r0
+	out r7, r0
 	mov r0, 100
-	out r4, r0
+	out r7, r0
 	halt
