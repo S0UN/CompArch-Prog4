@@ -13,12 +13,10 @@
 	in r1, r0
 	brgt r22, r1, r0
 	halt
-
 :INIT_START
 	ld r2, 512
 	mov r3, r1
 	br :ITEM_LOAD_LOOP
-
 :ITEM_LOAD_LOOP
 	subi r3, 1
 	brgt r26, r0, r3
@@ -29,63 +27,50 @@
 	add r8, r2, r6
 	mov (r8)(0), r4
 	br :ITEM_LOAD_LOOP
-
 :READ_KEY
 	in r10, r0
 	mov r11, r0
 	mov r12, r1
 	subi r12, 1
 	br :BIN_SEARCH_LOOP
-
 :BIN_SEARCH_LOOP
 	brgt r28, r11, r12
 	br :CALC_MIDPOINT
-
 :CALC_MIDPOINT
 	add r13, r11, r12
 	ld r14, 2
 	div r13, r13, r14
 	br :CALC_MIDPOINT_DONE
-
 :CALC_MIDPOINT_DONE
 	mul r15, r13, r5
 	add r15, r2, r15
 	br :LOAD_MID_VALUE
-
 :LOAD_MID_VALUE
 	mov r16, (r15)(0)
 	br :COMPARE_VALUES
-
 :COMPARE_VALUES
 	sub r17, r10, r16
 	brnz r29, r17
 	br :KEY_FOUND
-
 :KEY_FOUND
 	ld r18, 431349919590
 	out r30, r18
 	halt
-
 :COMPARE_EVAL
 	shftri r17, 63
 	brnz r23, :UPDATE_SELECTION
 	br :UPDATE_SELECTION
-
 :UPDATE_SELECTION
-	; Extra label to break update flow
 	brnz r23, :HIGH_UPDATE2
 	br :LOW_UPDATE2
-
 :LOW_UPDATE2
 	mov r11, r13
 	addi r11, 1
 	br :BIN_SEARCH_LOOP
-
 :HIGH_UPDATE2
 	mov r12, r13
 	subi r12, 1
 	br :BIN_SEARCH_LOOP
-
 :NOT_FOUND_LABEL
 	ld r18, 28258114110997510
 	out r30, r18
