@@ -1,90 +1,101 @@
 .code
-	clr r0
-	clr r7
-	ld r30, 1
-	ld r22, :INIT_START
-	ld r23, :HIGH_UPDATE2
-	ld r24, :LOW_UPDATE2
-	ld r25, :ITEM_LOAD_LOOP
-	ld r26, :READ_KEY
-	ld r27, :BIN_SEARCH_LOOP
-	ld r28, :NOT_FOUND_LABEL
-	ld r29, :COMPARE_EVAL
-	in r1, r0
-	ld r16, :INIT_START
-	brgt r16, r1, r0
-	halt
-:INIT_START
-	ld r2, 86016
-	mov r3, r1
-	ld r16, :ITEM_LOAD_LOOP
-	br r16
-:ITEM_LOAD_LOOP
-	subi r3, 1
-	ld r16, :READ_KEY
-	brgt r16, r0, r3
-	in r4, r0
-	ld r5, 8
-	mul r6, r7, r5
-	addi r7, 1
-	add r8, r2, r6
-	mov (r8)(0), r4
-	ld r16, :ITEM_LOAD_LOOP
-	br r16
-:READ_KEY
-	in r10, r0
-	mov r11, r0
-	mov r12, r1
-	subi r12, 1
-	ld r16, :BIN_SEARCH_LOOP
-	br r16
-:BIN_SEARCH_LOOP
-	ld r16, :NOT_FOUND_LABEL
-	brgt r16, r11, r12
-	ld r16, :CALC_MIDPOINT
-	br r16
-:CALC_MIDPOINT
-	add r13, r11, r12
-	ld r14, 2
-	div r13, r13, r14
-	ld r16, :CALC_MIDPOINT_DONE
-	br r16
-:CALC_MIDPOINT_DONE
-	mul r15, r13, r5
-	add r15, r2, r15
-	ld r16, :LOAD_MID_VALUE
-	br r16
-:LOAD_MID_VALUE
-	mov r16, (r15)(0)
-	ld r16, :COMPARE_VALUES
-	br r16
-:COMPARE_VALUES
-	sub r17, r10, r16
-	ld r16, :COMPARE_EVAL
-	brnz r16, r17
-	ld r16, :KEY_FOUND
-	br r16
-:KEY_FOUND
-	ld r18, 431349919590
-	out r30, r18
-	halt
-:COMPARE_EVAL
-	shftri r17, 63
-	ld r16, :HIGH_UPDATE2
-	brnz r16, r17
-	ld r16, :LOW_UPDATE2
-	br r16
-:LOW_UPDATE2
-	mov r11, r13
-	addi r11, 1
-	ld r16, :BIN_SEARCH_LOOP
-	br r16
-:HIGH_UPDATE2
-	mov r12, r13
-	subi r12, 1
-	ld r16, :BIN_SEARCH_LOOP
-	br r16
-:NOT_FOUND_LABEL
-	ld r18, 28258114110997510
-	out r30, r18
-	halt
+:START
+    ld r20, 0
+    in r1, r20
+    mov r10, r1
+    mov r12, r31
+    ld r2, :READ_LOOP
+    ld r3, :BIN_SEARCH
+    ld r7, 3
+
+:READ_LOOP
+    ld r8, :GET_ITEM
+    brnz r8, r1
+    ld r4, :BIN_SEARCH
+    br r4
+
+:GET_ITEM
+    in r4, r20
+    push r4
+    ld r21, 1
+    sub r1, r1, r21
+    ld r4, :READ_LOOP
+    br r4
+
+:BIN_SEARCH
+    mov r12, r31
+    in r6, r20
+    ld r5, :ZERO
+    mov r11, r10
+    ld r21, 1
+    sub r11, r11, r21
+    ld r16, :R_NOT_FOUND
+    ld r17, :SEARCH_RIGHT
+    ld r18, :SEARCH_LEFT
+    ld r19, :SEARCH_LOOP
+
+:SEARCH_LOOP
+    brgt r16, r5, r11
+    add r8, r5, r11
+    ld r21, 1
+    shftr r8, r8, r21
+    ld r22, 8
+    mul r13, r8, r22
+    add r14, r12, r13
+    mov r15, (r14)(0)
+    brgt r17, r6, r15
+    brgt r18, r15, r6
+    ld r4, :FOUND
+    br r4
+
+:SEARCH_RIGHT
+    mov r5, r8
+    ld r21, 1
+    add r5, r5, r21
+    br r19
+
+:SEARCH_LEFT
+    mov r11, r8
+    ld r21, 1
+    sub r11, r11, r21
+    br r19
+
+:FOUND
+    ld r4, 3
+    mov r10, 102
+    out r4, r10
+    mov r10, 111
+    out r4, r10
+    mov r10, 117
+    out r4, r10
+    mov r10, 110
+    out r4, r10
+    mov r10, 100
+    out r4, r10
+    halt
+
+:R_NOT_FOUND
+    ld r4, 3
+    mov r10, 110
+    out r4, r10
+    mov r10, 111
+    out r4, r10
+    mov r10, 116
+    out r4, r10
+    mov r10, 32
+    out r4, r10
+    mov r10, 102
+    out r4, r10
+    mov r10, 111
+    out r4, r10
+    mov r10, 117
+    out r4, r10
+    mov r10, 110
+    out r4, r10
+    mov r10, 100
+    out r4, r10
+    halt
+
+.data
+:ZERO
+    0
