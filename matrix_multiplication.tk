@@ -1,0 +1,149 @@
+.code
+	in      r1, r0             
+	ld      r6, 0x2000       
+	ld      r7, 0x3000        
+	ld      r8, 0x4000          
+	ld      r20, 1              
+	clr     r2               
+
+:A_loop
+	ld      r16, :A_body
+	brgt    r16, r1, r2
+	ld      r16, :B_read_start
+	br      r16
+
+:A_body
+	clr     r3
+:A_inner
+	ld      r16, :A_inner_body
+	brgt    r16, r1, r3
+	addi    r2, 1
+	ld      r16, :A_loop
+	br      r16
+
+:A_inner_body
+	mul     r9, r2, r1
+	add     r9, r9, r3
+	shftli  r9, 3
+	add     r9, r6, r9
+	in      r10, r0
+	mov (r9)(0), r10
+	addi    r3, 1
+	ld      r16, :A_inner
+	br      r16
+
+:B_read_start
+	clr     r2
+:B_loop
+	ld      r16, :B_body
+	brgt    r16, r1, r2
+	ld      r16, :Multiply_start
+	br      r16
+
+:B_body
+	clr     r3
+:B_inner
+	ld      r16, :B_inner_body
+	brgt    r16, r1, r3
+	addi    r2, 1
+	ld      r16, :B_loop
+	br      r16
+
+:B_inner_body
+	mul     r9, r2, r1
+	add     r9, r9, r3
+	shftli  r9, 3
+	add     r9, r7, r9
+	in      r10, r0
+	mov (r9)(0), r10
+	addi    r3, 1
+	ld      r16, :B_inner
+	br      r16
+
+:Multiply_start
+	clr     r2
+:M_loop
+	ld      r16, :M_body
+	brgt    r16, r1, r2
+	ld      r16, :Output_start
+	br      r16
+
+:M_body
+	mov r15, r2
+	clr     r3
+:M_inner
+	ld      r16, :M_inner_body
+	brgt    r16, r1, r3
+	addi    r2, 1
+	ld      r16, :M_loop
+	br      r16
+
+:M_inner_body
+	ld      r5, 0
+	clr     r4
+:K_loop
+	ld      r16, :K_body
+	brgt    r16, r1, r4
+	ld      r16, :Store_C
+	br      r16
+
+:K_body
+	mul     r9, r15, r1
+	add     r9, r9, r4
+	shftli  r9, 3
+	add     r9, r6, r9
+	mov r11, (r9)(0)
+
+	mul     r12, r4, r1
+	add     r12, r12, r3
+	shftli  r12, 3
+	add     r12, r7, r12
+	mov r13, (r12)(0)
+
+	mulf    r14, r11, r13
+	addf    r5, r5, r14
+	
+	addi    r4, 1
+	ld      r16, :K_loop
+	br      r16
+
+:Store_C
+	mul     r9, r15, r1
+	add     r9, r9, r3
+	shftli  r9, 3
+	add     r9, r8, r9
+	mov (r9)(0), r5
+	addi    r3, 1
+	ld      r16, :M_inner
+	br      r16
+
+:Output_start
+	clr     r2
+:O_outer
+	ld      r16, :O_body
+	brgt    r16, r1, r2
+	ld      r16, :Halt_program
+	br      r16
+
+:O_body
+	clr     r3
+:O_inner
+	ld      r16, :O_inner_body
+	brgt    r16, r1, r3
+	addi    r2, 1
+	ld      r16, :O_outer
+	br      r16
+
+:O_inner_body
+	mul     r9, r2, r1
+	add     r9, r9, r3
+	shftli  r9, 3
+	add     r9, r8, r9
+	mov r10, (r9)(0)
+	out     r20, r10        
+	addi    r3, 1
+	ld      r16, :O_inner
+	br      r16
+
+:Halt_program
+	priv    r0, r0, r0, 0x0
