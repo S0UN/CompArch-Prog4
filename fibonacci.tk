@@ -1,0 +1,19 @@
+.code
+    in r2, r0       
+    xor r3, r3, r3   
+    addi r3, 1       
+    xor r0, r0, r0   
+    addi r1, 1      
+    out r3, r0       
+    subi r2, 1        
+    brnz :L_LOOP, r2 
+    halt
+
+:L_LOOP
+    add r4, r0, r1
+    out r3, r4
+    mov r0, r1      
+    mov r1, r4       
+    subi r2, 1      
+    brnz :L_LOOP, r2
+    halt
