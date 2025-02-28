@@ -1,5 +1,13 @@
 .code
+	ld r3, 1
 	in r2, r0
+	mov r13, r2
+	subi r13, 1
+	ld r12, :BODY
+	brnz r12, r13
+	out r3, r13
+	halt
+:BODY
 	xor r3, r3, r3
 	addi r3, 1
 	xor r0, r0, r0
