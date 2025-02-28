@@ -1,0 +1,20 @@
+.code
+:START
+	ld r1, 4         ; n = 4
+	call r2, :FACT   ; result returned in r2
+	ld r3, 3
+	out r3, r2
+	halt
+:FACT
+	; If n <= 1, return 1
+	sub r4, r1, 1
+	brnz r4, :RECURSE
+	mov r2, 1
+	return
+:RECURSE
+	push r1
+	sub r1, r1, 1
+	call r2, :FACT
+	pop r1
+	mul r2, r2, r1
+	return

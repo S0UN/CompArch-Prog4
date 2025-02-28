@@ -575,10 +575,8 @@ int main(int argc, char *argv[])
 
     ArrayList instructions;
     initialize_arraylist(&instructions);
-    // ---------------- NEW: Separate counters for code and data.
     uint64_t code_address = 0x2000;  // Code section starts at 0x2000.
     uint64_t data_address = 0x10000; // Data section starts at 0x10000.
-    // ---------------- End NEW
 
     // First pass: Collect labels.
     if (process_file_first_pass(argv[1], &labels, (int *)&code_address, (int *)&data_address) != 0)
@@ -676,7 +674,6 @@ int main(int argc, char *argv[])
     }
     fclose(fin);
 
-    // ---------------- NEW: Write the header (as 5 64-bit values) at the beginning.
     TinkerFileHeader header;
     header.file_type = 0;
     header.code_seg_begin = 0x2000;
@@ -686,7 +683,6 @@ int main(int argc, char *argv[])
     fseek(fout, 0, SEEK_SET);
     fwrite(&header, sizeof(header), 1, fout);
     fclose(fout);
-    // ---------------- End NEW
 
     remove(tempAssembly);
     return 0;
@@ -1874,7 +1870,6 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
         return;
     }
 
-    // ---------------- NEW: Compute header fields from the instructions array ----------------
     uint64_t code_size = 0, data_size = 0;
     for (int i = 0; i < instructions->size; i++)
     {
@@ -1910,7 +1905,6 @@ void write_output_file(const char *output_filename, ArrayList *instructions)
     printf("%" PRIu64 "\n", code_size);
     printf("0x%" PRIX64 "\n", data_seg_begin);
     printf("%" PRIu64 "\n\n", data_size);
-    // ---------------- End NEW Header output ----------------
 
     // Print the .code section header.
     fprintf(fp, ".code\n");

@@ -1,0 +1,11 @@
+.code
+:START
+	ld r1, 5       ; counter (n)
+	ld r2, 0       ; sum = 0
+:LOOP
+	add r2, r2, r1
+	sub r1, r1, 1
+	brnz r1, :LOOP
+	ld r3, 3
+	out r3, r2
+	halt

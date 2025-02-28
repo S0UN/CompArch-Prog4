@@ -1,0 +1,21 @@
+.code
+:START
+	ld r1, 5        ; n = 5
+	call r2, :SUM   ; call subroutine; result in r2
+	ld r3, 3
+	out r3, r2
+	halt
+:SUM
+	; if n == 0, return 0
+	ld r4, 0
+	sub r5, r1, 0
+	brnz r5, :CONTINUE
+	mov r2, 0
+	return
+:CONTINUE
+	push r1
+	sub r1, r1, 1
+	call r2, :SUM
+	pop r1
+	add r2, r2, r1
+	return

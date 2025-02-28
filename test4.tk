@@ -1,0 +1,11 @@
+.code
+:START
+	ld r1, :ARRAY   ; load address of array into r1
+	mov r2, (r1)(0) ; read first element of array
+	ld r3, 3
+	out r3, r2
+	halt
+.data
+:ARRAY
+	42
+	100

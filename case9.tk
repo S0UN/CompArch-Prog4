@@ -1,0 +1,8 @@
+.code
+:START
+	; NOT: ~5 (if 5 = 000...0101 then NOT gives all ones except bits set in 5)
+	ld r1, 5
+	not r2, r1
+	ld r3, 3
+	out r3, r2
+	halt

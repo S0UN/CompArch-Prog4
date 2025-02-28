@@ -1,0 +1,12 @@
+.code
+:START
+	ld r1, :DATA_LOC  ; r1 gets address of DATA_LOC
+	ld r2, 12345
+	mov (r1)(0), r2   ; store 12345 at DATA_LOC
+	mov r3, (r1)(0)   ; load value from DATA_LOC into r3
+	ld r4, 3
+	out r4, r3
+	halt
+.data
+:DATA_LOC
+	0

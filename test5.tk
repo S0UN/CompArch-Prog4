@@ -1,0 +1,15 @@
+.code
+:START
+	ld r1, 10
+	ld r2, 10
+	sub r3, r1, r2
+	brnz r3, :NOT_EQUAL
+	ld r4, 3
+	mov r5, 70    ; ASCII 'F'
+	out r4, r5
+	halt
+:NOT_EQUAL
+	ld r4, 3
+	mov r5, 78    ; ASCII 'N'
+	out r4, r5
+	halt

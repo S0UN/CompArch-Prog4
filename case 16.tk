@@ -1,0 +1,12 @@
+.code
+:START
+	ld r1, :ARRAY   ; r1 gets address of ARRAY
+	mov r2, (r1)(0) ; r2 = first element of ARRAY
+	ld r3, 3
+	out r3, r2
+	halt
+.data
+:ARRAY
+	99
+	100
+	101

@@ -18,7 +18,15 @@
 	sub r1, r1, r21
 	ld r4, :READ_LOOP
 	br r4
-:FOUND
+:NOTFOUND
+	mov r0, 110
+	out r7, r0
+	mov r0, 111
+	out r7, r0
+	mov r0, 116
+	out r7, r0
+	mov r0, 32
+	out r7, r0
 	mov r0, 102
 	out r7, r0
 	mov r0, 111

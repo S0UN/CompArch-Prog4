@@ -1,0 +1,16 @@
+.code
+:START
+	ld r1, 10    ; iteration counter
+	ld r2, 0     ; a = 0
+	ld r3, 1     ; b = 1
+:LOOP
+	brnz r1, :CONTINUE
+	ld r4, 3
+	out r4, r2   ; output Fibonacci number when counter reaches 0
+	halt
+:CONTINUE
+	add r5, r2, r3  ; next = a + b
+	mov r2, r3      ; a = b
+	mov r3, r5      ; b = next
+	sub r1, r1, 1
+	br :LOOP

@@ -1,0 +1,9 @@
+.code
+:START
+	; Left shift: 8 << 2 should give 32.
+	ld r1, 8
+	ld r2, 2
+	shftl r3, r1, r2
+	ld r4, 3
+	out r4, r3
+	halt

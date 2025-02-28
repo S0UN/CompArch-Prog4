@@ -1,0 +1,9 @@
+.code
+:BEGIN
+	ld r1, 20
+	ld r2, 4
+	sub r3, r1, r2
+	mul r4, r3, r2
+	ld r5, 3
+	out r5, r4
+	halt

@@ -1,0 +1,9 @@
+.code
+:START
+	; XOR: 6 (110b) XOR 5 (101b) = 3 (011b)
+	ld r1, 6
+	ld r2, 5
+	xor r3, r1, r2
+	ld r4, 3
+	out r4, r3
+	halt

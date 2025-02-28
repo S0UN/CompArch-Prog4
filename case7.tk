@@ -1,0 +1,9 @@
+.code
+:START
+	; AND: 6 (110b) AND 5 (101b) = 4 (100b)
+	ld r1, 6
+	ld r2, 5
+	and r3, r1, r2
+	ld r4, 3
+	out r4, r3
+	halt
