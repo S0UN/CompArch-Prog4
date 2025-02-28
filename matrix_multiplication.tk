@@ -1,8 +1,8 @@
 .code
 	in r1, r0
-	ld r6, 0x2000
-	ld r7, 0x3000
-	ld r8, 0x4000
+	ld r6, 8192
+	ld r7, 12288
+	ld r8, 16384
 	ld r20, 1
 	clr r2
 :A_loop
