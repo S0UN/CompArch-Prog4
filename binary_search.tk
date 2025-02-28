@@ -9,7 +9,7 @@
 :READ_LOOP
 	ld r8, :GET_ITEM
 	brnz r8, r1
-	ld r4, :FOUND
+	ld r4, :NOTFOUND
 	br r4
 :GET_ITEM
 	in r4, r20
