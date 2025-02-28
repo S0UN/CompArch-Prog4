@@ -9,7 +9,6 @@
 	brnz r10, r2
 	out r3, r1
 	halt
-
 :LOOP
 	add r4, r0, r1
 	mov r0, r1
