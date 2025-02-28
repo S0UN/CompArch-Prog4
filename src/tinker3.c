@@ -120,7 +120,7 @@ void exec_br(uint8_t rd, uint64_t *new_pc)
 {
     if (r[rd] >= MEM)
     {
-        fprintf(stderr, "Simulation error: Branch target out of bounds\n");
+        fprintf(stderr, "Simulation error: Branch target out of bounds: 0x%" PRIX64 "\n", r[rd]);
         exit(1);
     }
     *new_pc = r[rd];
@@ -156,7 +156,7 @@ void exec_brnz(uint8_t rd, uint8_t rs, uint64_t current_pc, uint64_t *new_pc)
     {
         if (r[rd] >= MEM || r[rd] < START_ADDRESS)
         {
-            fprintf(stderr, "Simulation error: Branch target out of bounds\n");
+            fprintf(stderr, "Simulation error: Branch target out of bounds: 0x%" PRIX64 "\n", r[rd]);
             exit(1);
         }
         *new_pc = r[rd];
@@ -175,10 +175,9 @@ void exec_call(uint8_t rd, uint64_t current_pc, uint64_t *new_pc)
         fprintf(stderr, "Simulation error: Stack pointer out of bounds\n");
         exit(1);
     }
-    *((uint64_t *)(memory + r[31]-8)) = current_pc + 4;
+    *((uint64_t *)(memory + r[31] - 8)) = current_pc + 4;
     *new_pc = r[rd];
 }
-
 
 void exec_return(uint64_t *new_pc)
 {
@@ -187,7 +186,7 @@ void exec_return(uint64_t *new_pc)
         fprintf(stderr, "Simulation error: Stack underflow\n");
         exit(1);
     }
-    *new_pc = *((uint64_t *)(memory + r[31]-8));
+    *new_pc = *((uint64_t *)(memory + r[31] - 8));
 }
 
 void exec_brgt(uint8_t rd, uint8_t rs, uint8_t rt, uint64_t *new_pc)
@@ -269,7 +268,8 @@ uint64_t mov_mr(uint64_t pc, uint8_t rd, uint8_t rs, uint8_t rt, uint16_t litera
                          : (int64_t)lit12;
     uint64_t address = r[rd] + offset;
 
-   if (address % 8 != 0) {
+    if (address % 8 != 0)
+    {
         error("Memory must be 8-byte aligned.");
     }
     mem_write(address, r[rs]);
@@ -409,6 +409,7 @@ void secondPass(uint64_t start_pc)
             break;
         case 0x0B:
             exec_brnz(rd, rs, pc, &next_pc);
+
             break;
         case 0x0C:
             exec_call(rd, pc, &next_pc);
@@ -475,23 +476,27 @@ int main(int argc, char *argv[])
     memset(r, 0, sizeof(r));
     r[31] = MEM;
 
-     // Read header (40 bytes: 5 64-bit values).
+    // Read header (40 bytes: 5 64-bit values).
     TinkerFileHeader header;
-    if (fread(&header, sizeof(header), 1, file) != 1) {
+    if (fread(&header, sizeof(header), 1, file) != 1)
+    {
         fprintf(stderr, "Error reading header\n");
         fclose(file);
         return 1;
     }
-  
+
     // Read code segment.
-    if (header.code_seg_size > 0) {
-        if (fseek(file, sizeof(header), SEEK_SET) != 0) {
+    if (header.code_seg_size > 0)
+    {
+        if (fseek(file, sizeof(header), SEEK_SET) != 0)
+        {
             perror("fseek code segment");
             fclose(file);
             return 1;
         }
         size_t code_read = fread(memory + header.code_seg_begin, 1, header.code_seg_size, file);
-        if (code_read != header.code_seg_size) {
+        if (code_read != header.code_seg_size)
+        {
             fprintf(stderr, "Failed to read complete code segment\n");
             fclose(file);
             return 1;
@@ -499,22 +504,24 @@ int main(int argc, char *argv[])
     }
 
     // Read data segment.
-    if (header.data_seg_size > 0) {
-        if (fseek(file, sizeof(header) + header.code_seg_size, SEEK_SET) != 0) {
+    if (header.data_seg_size > 0)
+    {
+        if (fseek(file, sizeof(header) + header.code_seg_size, SEEK_SET) != 0)
+        {
             perror("fseek data segment");
             fclose(file);
             return 1;
         }
         size_t data_read = fread(memory + header.data_seg_begin, 1, header.data_seg_size, file);
-        if (data_read != header.data_seg_size) {
+        if (data_read != header.data_seg_size)
+        {
             fprintf(stderr, "Failed to read complete data segment\n");
             fclose(file);
             return 1;
         }
     }
     fclose(file);
-    
+
     secondPass(header.code_seg_begin);
     return 0;
-
 }
