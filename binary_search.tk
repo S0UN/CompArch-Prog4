@@ -1,0 +1,76 @@
+.code
+    in r2, r0
+    ld r10, :BASE
+    xor r11, r11, r11
+:READ
+    mov r12, r2
+    sub r12, r12, r11
+    ld r20, :RCONT
+    brnz r20, r12
+    ld r20, :RDONE
+    br r20
+:RCONT
+    in r6, r0
+    mov r13, r11
+    shftli r13, 3
+    mov r14, r10
+    add r14, r14, r13
+    mov (r14)(0), r6
+    addi r11, 1
+    ld r20, :READ
+    br r20
+:RDONE
+    xor r3, r3, r3
+    addi r3, 3
+:LOOP
+    in r4, r0
+    xor r5, r5, r5
+    mov r6, r2
+    subi r6, 1
+:BS
+    ld r20, :NF
+    brgt r20, r5, r6
+    mov r7, r5
+    add r7, r7, r6
+    shfttri r7, 1
+    mov r8, r7
+    shftli r8, 3
+    add r8, r10, r8
+    mov r9, (r8)(0)
+    xor r12, r9, r4
+    ld r20, :NE
+    brnz r20, r12
+    ld r15, :FOUND
+    out r3, r15
+    ld r20, :LOOP
+    br r20
+:NE
+    sub r13, r4, r9
+    ld r20, :UL
+    brgt r20, r13, r0
+    ld r20, :UH
+    br r20
+:UL
+    mov r5, r7
+    addi r5, 1
+    ld r20, :BS
+    br r20
+:UH
+    mov r6, r7
+    subi r6, 1
+    ld r20, :BS
+    br r20
+:NF
+    ld r15, :NFND
+    out r3, r15
+    ld r20, :LOOP
+    br r20
+    halt
+
+.data
+:BASE
+    0x0000000000004000
+:FOUND
+    0x000000646E756F66
+:NFND
+    0x6E6F69746F666E00
