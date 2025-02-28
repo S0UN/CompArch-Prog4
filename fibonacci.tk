@@ -9,7 +9,6 @@
 	ld r10, :L_LOOP
 	brnz r10, r2
 	halt
-
 :L_LOOP
 	add r4, r0, r1
 	out r3, r4
