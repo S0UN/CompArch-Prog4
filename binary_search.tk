@@ -1,101 +1,32 @@
 .code
 :START
-    ld r20, 0
-    in r1, r20
-    mov r10, r1
-    mov r12, r31
-    ld r2, :READ_LOOP
-    ld r3, :BIN_SEARCH
-    ld r7, 3
-
+	ld r20, 0
+	in r1, r20
+	mov r10, r1
+	mov r12, r31
+	ld r2, :READ_LOOP
+	ld r7, 3
 :READ_LOOP
-    ld r8, :GET_ITEM
-    brnz r8, r1
-    ld r4, :BIN_SEARCH
-    br r4
-
+	ld r8, :GET_ITEM
+	brnz r8, r1
+	ld r4, :FOUND
+	br r4
 :GET_ITEM
-    in r4, r20
-    push r4
-    ld r21, 1
-    sub r1, r1, r21
-    ld r4, :READ_LOOP
-    br r4
-
-:BIN_SEARCH
-    mov r12, r31
-    in r6, r20
-    ld r5, :ZERO
-    mov r11, r10
-    ld r21, 1
-    sub r11, r11, r21
-    ld r16, :R_NOT_FOUND
-    ld r17, :SEARCH_RIGHT
-    ld r18, :SEARCH_LEFT
-    ld r19, :SEARCH_LOOP
-
-:SEARCH_LOOP
-    brgt r16, r5, r11
-    add r8, r5, r11
-    ld r21, 1
-    shftr r8, r8, r21
-    ld r22, 8
-    mul r13, r8, r22
-    add r14, r12, r13
-    mov r15, (r14)(0)
-    brgt r17, r6, r15
-    brgt r18, r15, r6
-    ld r4, :FOUND
-    br r4
-
-:SEARCH_RIGHT
-    mov r5, r8
-    ld r21, 1
-    add r5, r5, r21
-    br r19
-
-:SEARCH_LEFT
-    mov r11, r8
-    ld r21, 1
-    sub r11, r11, r21
-    br r19
-
+	in r4, r20
+	push r4
+	ld r21, 1
+	sub r1, r1, r21
+	ld r4, :READ_LOOP
+	br r4
 :FOUND
-    ld r4, 3
-    mov r10, 102
-    out r4, r10
-    mov r10, 111
-    out r4, r10
-    mov r10, 117
-    out r4, r10
-    mov r10, 110
-    out r4, r10
-    mov r10, 100
-    out r4, r10
-    halt
-
-:R_NOT_FOUND
-    ld r4, 3
-    mov r10, 110
-    out r4, r10
-    mov r10, 111
-    out r4, r10
-    mov r10, 116
-    out r4, r10
-    mov r10, 32
-    out r4, r10
-    mov r10, 102
-    out r4, r10
-    mov r10, 111
-    out r4, r10
-    mov r10, 117
-    out r4, r10
-    mov r10, 110
-    out r4, r10
-    mov r10, 100
-    out r4, r10
-    halt
-
-.data
-:ZERO
-    0
+	mov r0, 102
+	out r7, r0
+	mov r0, 111
+	out r7, r0
+	mov r0, 117
+	out r7, r0
+	mov r0, 110
+	out r7, r0
+	mov r0, 100
+	out r7, r0
+	halt
