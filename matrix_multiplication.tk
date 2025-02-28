@@ -128,4 +128,4 @@
 	ld r16, :O_inner
 	br r16
 :Halt_program
-	priv r0, r0, r0, 0x0
+	priv r0, r0, r0, 0
