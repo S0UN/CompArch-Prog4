@@ -6,7 +6,7 @@
     addi r1, 1      
     out r3, r0       
     subi r2, 1        
-	ld r10, :L_LOOP 
+    ld r10, :L_LOOP 
     brnz r10, r2     
     halt
 
